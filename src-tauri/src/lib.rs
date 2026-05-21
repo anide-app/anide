@@ -18,6 +18,30 @@ use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    std::panic::set_hook(Box::new(|info| {
+        let msg = info.to_string();
+        eprintln!("[panic] {msg}");
+        // Write to a platform-appropriate log file so crashes are diagnosable
+        // even in release builds where stderr is discarded.
+        let log_path: Option<std::path::PathBuf> = {
+            #[cfg(target_os = "macos")]
+            { std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join("Library/Logs/anide-panic.log")) }
+            #[cfg(target_os = "windows")]
+            { std::env::var_os("APPDATA").map(|d| std::path::PathBuf::from(d).join("anide\\anide-panic.log")) }
+            #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+            { std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".local/share/anide/anide-panic.log")) }
+        };
+        if let Some(path) = log_path {
+            use std::io::Write as _;
+            if let Some(parent) = path.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&path) {
+                let _ = writeln!(f, "{msg}");
+            }
+        }
+    }));
+
     tauri::Builder::default()
         .manage(WatcherState(Mutex::new(None), Arc::new(AtomicU64::new(0))))
         .manage(DockerStreamState::new())
@@ -132,12 +156,14 @@ pub fn run() {
             let window = win_builder.build()?;
 
             #[cfg(target_os = "windows")]
-            apply_acrylic(&window, Some((18, 18, 18, 125)))
-                .expect("Failed to apply acrylic effect");
+            if let Err(e) = apply_acrylic(&window, Some((18, 18, 18, 125))) {
+                eprintln!("[setup] acrylic effect unavailable: {e}");
+            }
 
             #[cfg(target_os = "macos")]
-            apply_vibrancy(&window, NSVisualEffectMaterial::HudWindow, None, None)
-                .expect("Failed to apply vibrancy effect");
+            if let Err(e) = apply_vibrancy(&window, NSVisualEffectMaterial::HudWindow, None, None) {
+                eprintln!("[setup] vibrancy effect unavailable: {e}");
+            }
 
             #[cfg(not(any(target_os = "windows", target_os = "macos")))]
             let _ = window;

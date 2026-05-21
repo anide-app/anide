@@ -252,7 +252,9 @@ pub fn duplicate_request(project_path: String, request_path: String) -> Result<S
         .unwrap_or_default()
         .to_string_lossy()
         .to_string();
-    let parent = full_path.parent().unwrap();
+    let parent = full_path
+        .parent()
+        .ok_or_else(|| AppError::Other("invalid request path: no parent directory".into()))?;
     let requests_dir = requests_dir_path(&project_path);
 
     let copy_path = generate_copy_name(parent, &stem);

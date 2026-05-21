@@ -105,26 +105,33 @@ struct DockerComposeLinePayload {
 // and shares the underlying hyper connection pool, so connections are reused
 // across all commands instead of being re-established on every call.
 
-static DOCKER: OnceLock<Docker> = OnceLock::new();
+static DOCKER: OnceLock<Option<Docker>> = OnceLock::new();
 
-fn docker_client() -> Result<Docker, AppError> {
-    Ok(DOCKER
+fn docker() -> Option<&'static Docker> {
+    DOCKER
         .get_or_init(|| {
             Docker::connect_with_local_defaults()
-                .expect("bollard: failed to initialise Docker client configuration")
+                .map_err(|e| eprintln!("[docker] client init failed: {e}"))
+                .ok()
         })
-        .clone())
+        .as_ref()
+}
+
+fn docker_client() -> Result<Docker, AppError> {
+    docker()
+        .cloned()
+        .ok_or_else(|| AppError::Other("Docker is not available on this machine".into()))
 }
 
 /// Spawn a background task that pings Docker at app startup.
-/// This warms up the named-pipe / socket connection so the first user-visible
-/// API call hits an already-open connection rather than paying connection setup.
+/// Best-effort only — runs entirely off the main thread so a missing daemon
+/// cannot block or crash launch.
 pub fn prewarm_docker() {
-    if let Ok(docker) = docker_client() {
-        tauri::async_runtime::spawn(async move {
+    tauri::async_runtime::spawn(async move {
+        if let Ok(docker) = docker_client() {
             let _ = timeout(Duration::from_secs(3), docker.ping()).await;
-        });
-    }
+        }
+    });
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

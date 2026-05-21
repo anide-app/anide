@@ -256,7 +256,7 @@ pub fn terminal_create(
         }
     });
 
-    let mut sessions = state.sessions.lock().unwrap();
+    let mut sessions = state.sessions.lock().map_err(|_| "session lock poisoned".to_string())?;
     if sessions.contains_key(&session_id) {
         return Err(format!("session already exists: {session_id}"));
     }
@@ -274,7 +274,7 @@ pub fn terminal_write(
     session_id: String,
     data: String,
 ) -> Result<(), String> {
-    let mut sessions = state.sessions.lock().unwrap();
+    let mut sessions = state.sessions.lock().map_err(|_| "session lock poisoned".to_string())?;
     let session = sessions
         .get_mut(&session_id)
         .ok_or_else(|| format!("session not found: {session_id}"))?;
@@ -288,7 +288,7 @@ pub fn terminal_resize(
     cols: u16,
     rows: u16,
 ) -> Result<(), String> {
-    let sessions = state.sessions.lock().unwrap();
+    let sessions = state.sessions.lock().map_err(|_| "session lock poisoned".to_string())?;
     let session = sessions
         .get(&session_id)
         .ok_or_else(|| format!("session not found: {session_id}"))?;
@@ -303,7 +303,7 @@ pub fn terminal_close(
     state: State<'_, TerminalState>,
     session_id: String,
 ) -> Result<(), String> {
-    if let Some(mut session) = state.sessions.lock().unwrap().remove(&session_id) {
+    if let Some(mut session) = state.sessions.lock().map_err(|_| "session lock poisoned".to_string())?.remove(&session_id) {
         session.alive.store(false, Ordering::Relaxed);
         let _ = session.child.kill();
     }

@@ -447,7 +447,7 @@ pub fn git_log(project_path: String, limit: Option<usize>) -> Result<Vec<CommitI
         let parents: Vec<String> = commit.parent_ids().map(|id| id.to_string()).collect();
         result.push(CommitInfo {
             hash: info.id.to_string(),
-            short_hash: info.id.to_string()[..8].to_string(),
+            short_hash: info.id.to_string().chars().take(8).collect(),
             summary: msg.summary().to_str_lossy().to_string(),
             body: {
                 let raw = String::from_utf8_lossy(commit.message_raw().unwrap_or_default());
