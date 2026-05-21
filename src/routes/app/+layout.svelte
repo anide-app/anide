@@ -6,6 +6,7 @@
   import { workspace } from '$lib/stores/workspace.svelte.js';
   import { useSearchParams, createSearchParamsSchema } from 'runed/kit';
   import { getCurrentWindow } from '@tauri-apps/api/window';
+  import { getVersion } from '@tauri-apps/api/app';
   import { platform } from '@tauri-apps/plugin-os';
   import { listen } from '@tauri-apps/api/event';
   import { watchProject, unwatchProject } from '$lib/commands/watcher.js';
@@ -62,6 +63,7 @@
 
   let isWindows = $state(false);
   let appWindow;
+  let appVersion = $state('');
 
   // ── Sidebar resize ─────────────────────────────────────────────────────────
   let sidebarWidth = $state(280);
@@ -155,6 +157,7 @@
   onMount(async () => {
     appWindow = getCurrentWindow();
     isWindows = (await platform()) === 'windows';
+    appVersion = await getVersion();
   });
 
   const toolItems = [
@@ -468,6 +471,9 @@
           <div class="flex flex-col items-center gap-2 text-center my-4">
             <p class="text-xs text-muted-foreground mb-2">welcome to</p>
             <p class="text-5xl font-bold font-serif lowercase tracking-tight text-foreground">anide.app</p>
+            {#if appVersion}
+              <p class="text-xs text-muted-foreground mt-1">v{appVersion}</p>
+            {/if}
           </div>
           <button
             type="button"
