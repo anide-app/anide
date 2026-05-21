@@ -33,6 +33,9 @@ pub fn run() {
         };
         if let Some(path) = log_path {
             use std::io::Write as _;
+            if let Some(parent) = path.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
             if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&path) {
                 let _ = writeln!(f, "{msg}");
             }
