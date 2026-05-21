@@ -11,7 +11,10 @@
       "Bash(bun run check)",
       "Bash(bun run check:watch)",
       "Bash(bun run tauri)",
-      "Bash(gh repo *)"
+      "Bash(gh repo *)",
+      "Bash(gh release *)",
+      "PowerShell(gh release view v0.1.1 --repo anide-app/anide --json assets,isDraft,isPrerelease,tagName,name 2>&1)",
+      "WebFetch(domain:api.github.com)"
     ]
   }
 }
