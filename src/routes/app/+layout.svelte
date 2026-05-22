@@ -313,6 +313,7 @@
               <button
                 {...props}
                 type="button"
+                aria-label="Explorer"
                 onclick={() => workspace.setActiveTool('files')}
                 class="w-full h-10 flex items-center justify-center relative transition-colors duration-150
                   {workspace.activeTool === 'files' && workspace.sidebarOpen
