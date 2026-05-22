@@ -204,7 +204,7 @@
               <ContextMenu.Trigger class="block w-full">
                 <button
                   type="button"
-                  onclick={() => openEnvFile(node.file)}
+                  onclick={(e) => { if (e.detail < 2) openEnvFile(node.file); }}
                   ondblclick={() => workspace.openTab({
                     id: `file-edit::${node.file.relPath}`,
                     type: 'file-edit',
