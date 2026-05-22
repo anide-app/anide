@@ -243,3 +243,490 @@ pub fn delete_doc_file(project_path: String, rel_path: String) -> Result<(), App
     }
     std::fs::remove_file(&path).map_err(AppError::Io)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::path::PathBuf;
+
+    /// Create a temporary directory with a unique name for each test.
+    fn tmp_dir(suffix: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("anide_test_{suffix}"));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    // ── walk_dir ─────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_walk_dir_dirs_appear_before_files() {
+        let root = tmp_dir("walk_order");
+        fs::write(root.join("aaa.txt"), "").unwrap();
+        fs::create_dir(root.join("bbb")).unwrap();
+        fs::write(root.join("ccc.txt"), "").unwrap();
+
+        let mut out = Vec::new();
+        walk_dir(&root, &root, &mut out);
+
+        // "bbb" directory must come before any file entries
+        let dir_pos  = out.iter().position(|e| e.path == "bbb").unwrap();
+        let file_pos = out.iter().position(|e| e.path == "aaa.txt").unwrap();
+        assert!(dir_pos < file_pos, "directories must precede files in walk output");
+    }
+
+    #[test]
+    fn test_walk_dir_alphabetical_within_group() {
+        let root = tmp_dir("walk_alpha");
+        fs::write(root.join("z.txt"), "").unwrap();
+        fs::write(root.join("a.txt"), "").unwrap();
+        fs::write(root.join("m.txt"), "").unwrap();
+
+        let mut out = Vec::new();
+        walk_dir(&root, &root, &mut out);
+
+        let names: Vec<&str> = out.iter().map(|e| e.path.as_str()).collect();
+        assert_eq!(names, vec!["a.txt", "m.txt", "z.txt"]);
+    }
+
+    #[test]
+    fn test_walk_dir_skips_node_modules() {
+        let root = tmp_dir("walk_skip_nm");
+        fs::create_dir(root.join("node_modules")).unwrap();
+        fs::write(root.join("node_modules").join("pkg.js"), "").unwrap();
+        fs::write(root.join("index.js"), "").unwrap();
+
+        let mut out = Vec::new();
+        walk_dir(&root, &root, &mut out);
+
+        let paths: Vec<&str> = out.iter().map(|e| e.path.as_str()).collect();
+        assert!(!paths.contains(&"node_modules"), "node_modules dir must be skipped");
+        assert!(paths.contains(&"index.js"), "regular files must still appear");
+    }
+
+    #[test]
+    fn test_walk_dir_skips_all_explorer_skip_dirs() {
+        let root = tmp_dir("walk_skip_all");
+        for skip in EXPLORER_SKIP {
+            fs::create_dir(root.join(skip)).unwrap();
+        }
+        fs::write(root.join("keep.txt"), "").unwrap();
+
+        let mut out = Vec::new();
+        walk_dir(&root, &root, &mut out);
+
+        for skip in EXPLORER_SKIP {
+            assert!(
+                !out.iter().any(|e| e.path == *skip),
+                "EXPLORER_SKIP dir '{}' must not appear in walk output",
+                skip
+            );
+        }
+        assert!(out.iter().any(|e| e.path == "keep.txt"));
+    }
+
+    #[test]
+    fn test_walk_dir_recursive_nested_dirs() {
+        let root = tmp_dir("walk_nested");
+        fs::create_dir_all(root.join("a").join("b")).unwrap();
+        fs::write(root.join("a").join("b").join("deep.txt"), "").unwrap();
+        fs::write(root.join("top.txt"), "").unwrap();
+
+        let mut out = Vec::new();
+        walk_dir(&root, &root, &mut out);
+
+        let paths: Vec<&str> = out.iter().map(|e| e.path.as_str()).collect();
+        assert!(paths.contains(&"a"), "parent dir must be listed");
+        assert!(paths.contains(&"a/b"), "nested dir must be listed");
+        assert!(paths.contains(&"a/b/deep.txt"), "deeply nested file must be listed");
+        assert!(paths.contains(&"top.txt"));
+    }
+
+    #[test]
+    fn test_walk_dir_uses_forward_slashes() {
+        let root = tmp_dir("walk_slashes");
+        fs::create_dir(root.join("sub")).unwrap();
+        fs::write(root.join("sub").join("file.txt"), "").unwrap();
+
+        let mut out = Vec::new();
+        walk_dir(&root, &root, &mut out);
+
+        let file_entry = out.iter().find(|e| !e.is_dir).unwrap();
+        assert!(!file_entry.path.contains('\\'), "paths must use forward slashes");
+    }
+
+    #[test]
+    fn test_walk_dir_empty_directory() {
+        let root = tmp_dir("walk_empty");
+        let mut out = Vec::new();
+        walk_dir(&root, &root, &mut out);
+        assert!(out.is_empty());
+    }
+
+    // ── create_project_file ───────────────────────────────────────────────────
+
+    #[test]
+    fn test_create_project_file_success() {
+        let root = tmp_dir("cpf_ok");
+        let result = create_project_file(
+            root.to_str().unwrap().to_string(),
+            "new_file.txt".to_string(),
+        );
+        assert!(result.is_ok());
+        assert!(root.join("new_file.txt").exists());
+    }
+
+    #[test]
+    fn test_create_project_file_creates_intermediate_dirs() {
+        let root = tmp_dir("cpf_parents");
+        let result = create_project_file(
+            root.to_str().unwrap().to_string(),
+            "sub/dir/file.txt".to_string(),
+        );
+        assert!(result.is_ok(), "should succeed even when parent dirs do not exist");
+        assert!(root.join("sub/dir/file.txt").exists());
+    }
+
+    #[test]
+    fn test_create_project_file_already_exists() {
+        let root = tmp_dir("cpf_exists");
+        fs::write(root.join("existing.txt"), "hello").unwrap();
+
+        let result = create_project_file(
+            root.to_str().unwrap().to_string(),
+            "existing.txt".to_string(),
+        );
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            AppError::AlreadyExists(p) => assert_eq!(p, "existing.txt"),
+            e => panic!("expected AlreadyExists, got {:?}", e),
+        }
+    }
+
+    #[test]
+    fn test_create_project_file_traversal_rejected() {
+        let root = tmp_dir("cpf_traversal");
+        let result = create_project_file(
+            root.to_str().unwrap().to_string(),
+            "../escape.txt".to_string(),
+        );
+        assert!(result.is_err(), "path traversal must be rejected");
+    }
+
+    // ── create_project_dir ────────────────────────────────────────────────────
+
+    #[test]
+    fn test_create_project_dir_success() {
+        let root = tmp_dir("cpd_ok");
+        let result = create_project_dir(
+            root.to_str().unwrap().to_string(),
+            "new_folder".to_string(),
+        );
+        assert!(result.is_ok());
+        assert!(root.join("new_folder").is_dir());
+    }
+
+    #[test]
+    fn test_create_project_dir_already_exists() {
+        let root = tmp_dir("cpd_exists");
+        fs::create_dir(root.join("existing_dir")).unwrap();
+
+        let result = create_project_dir(
+            root.to_str().unwrap().to_string(),
+            "existing_dir".to_string(),
+        );
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            AppError::AlreadyExists(p) => assert_eq!(p, "existing_dir"),
+            e => panic!("expected AlreadyExists, got {:?}", e),
+        }
+    }
+
+    #[test]
+    fn test_create_project_dir_traversal_rejected() {
+        let root = tmp_dir("cpd_traversal");
+        let result = create_project_dir(
+            root.to_str().unwrap().to_string(),
+            "../escaped_dir".to_string(),
+        );
+        assert!(result.is_err(), "path traversal must be rejected");
+    }
+
+    // ── delete_project_path ───────────────────────────────────────────────────
+
+    #[test]
+    fn test_delete_project_path_deletes_file() {
+        let root = tmp_dir("dpp_file");
+        fs::write(root.join("to_delete.txt"), "content").unwrap();
+
+        let result = delete_project_path(
+            root.to_str().unwrap().to_string(),
+            "to_delete.txt".to_string(),
+        );
+        assert!(result.is_ok());
+        assert!(!root.join("to_delete.txt").exists());
+    }
+
+    #[test]
+    fn test_delete_project_path_deletes_dir_recursively() {
+        let root = tmp_dir("dpp_dir");
+        fs::create_dir_all(root.join("subdir").join("nested")).unwrap();
+        fs::write(root.join("subdir").join("file.txt"), "data").unwrap();
+
+        let result = delete_project_path(
+            root.to_str().unwrap().to_string(),
+            "subdir".to_string(),
+        );
+        assert!(result.is_ok());
+        assert!(!root.join("subdir").exists());
+    }
+
+    #[test]
+    fn test_delete_project_path_not_found() {
+        let root = tmp_dir("dpp_missing");
+        let result = delete_project_path(
+            root.to_str().unwrap().to_string(),
+            "ghost.txt".to_string(),
+        );
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            AppError::NotFound(p) => assert_eq!(p, "ghost.txt"),
+            e => panic!("expected NotFound, got {:?}", e),
+        }
+    }
+
+    #[test]
+    fn test_delete_project_path_cannot_delete_root() {
+        let root = tmp_dir("dpp_root");
+        // Passing an empty rel_path resolves to the project root itself
+        let result = delete_project_path(
+            root.to_str().unwrap().to_string(),
+            ".".to_string(),
+        );
+        assert!(result.is_err(), "deleting the project root must be rejected");
+    }
+
+    #[test]
+    fn test_delete_project_path_traversal_rejected() {
+        let root = tmp_dir("dpp_traversal");
+        // Create a file outside the root we can reference
+        let outer = tmp_dir("dpp_traversal_outer");
+        fs::write(outer.join("victim.txt"), "data").unwrap();
+
+        let result = delete_project_path(
+            root.to_str().unwrap().to_string(),
+            "../dpp_traversal_outer/victim.txt".to_string(),
+        );
+        assert!(result.is_err(), "path traversal must be rejected");
+        // Outer file must not have been deleted
+        assert!(outer.join("victim.txt").exists(), "file outside project must not be deleted");
+    }
+
+    // ── rename_project_path ───────────────────────────────────────────────────
+
+    #[test]
+    fn test_rename_project_path_success() {
+        let root = tmp_dir("rpp_ok");
+        fs::write(root.join("old.txt"), "hello").unwrap();
+
+        let result = rename_project_path(
+            root.to_str().unwrap().to_string(),
+            "old.txt".to_string(),
+            "new.txt".to_string(),
+        );
+        assert!(result.is_ok());
+        assert!(!root.join("old.txt").exists());
+        assert!(root.join("new.txt").exists());
+    }
+
+    #[test]
+    fn test_rename_project_path_source_not_found() {
+        let root = tmp_dir("rpp_missing");
+        let result = rename_project_path(
+            root.to_str().unwrap().to_string(),
+            "ghost.txt".to_string(),
+            "renamed.txt".to_string(),
+        );
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            AppError::NotFound(p) => assert_eq!(p, "ghost.txt"),
+            e => panic!("expected NotFound, got {:?}", e),
+        }
+    }
+
+    #[test]
+    fn test_rename_project_path_renames_directory() {
+        let root = tmp_dir("rpp_dir");
+        fs::create_dir(root.join("old_dir")).unwrap();
+        fs::write(root.join("old_dir").join("child.txt"), "data").unwrap();
+
+        let result = rename_project_path(
+            root.to_str().unwrap().to_string(),
+            "old_dir".to_string(),
+            "new_dir".to_string(),
+        );
+        assert!(result.is_ok());
+        assert!(!root.join("old_dir").exists());
+        assert!(root.join("new_dir").join("child.txt").exists());
+    }
+
+    #[test]
+    fn test_rename_project_path_source_traversal_rejected() {
+        let root = tmp_dir("rpp_src_trav");
+        let outer = tmp_dir("rpp_src_trav_outer");
+        fs::write(outer.join("file.txt"), "data").unwrap();
+
+        let result = rename_project_path(
+            root.to_str().unwrap().to_string(),
+            "../rpp_src_trav_outer/file.txt".to_string(),
+            "moved.txt".to_string(),
+        );
+        assert!(result.is_err(), "source traversal must be rejected");
+    }
+
+    #[test]
+    fn test_rename_project_path_dest_traversal_rejected() {
+        let root = tmp_dir("rpp_dst_trav");
+        fs::write(root.join("file.txt"), "data").unwrap();
+
+        let result = rename_project_path(
+            root.to_str().unwrap().to_string(),
+            "file.txt".to_string(),
+            "../rpp_dst_trav_escape.txt".to_string(),
+        );
+        assert!(result.is_err(), "destination traversal must be rejected");
+    }
+
+    // ── read_project_file_b64 ─────────────────────────────────────────────────
+
+    #[test]
+    fn test_read_project_file_b64_encodes_correctly() {
+        let root = tmp_dir("b64_ok");
+        fs::write(root.join("data.bin"), b"hello world").unwrap();
+
+        let result = read_project_file_b64(
+            root.to_str().unwrap().to_string(),
+            "data.bin".to_string(),
+        );
+        assert!(result.is_ok());
+        use base64::Engine as _;
+        let decoded = base64::engine::general_purpose::STANDARD
+            .decode(result.unwrap())
+            .unwrap();
+        assert_eq!(decoded, b"hello world");
+    }
+
+    #[test]
+    fn test_read_project_file_b64_empty_file() {
+        let root = tmp_dir("b64_empty");
+        fs::write(root.join("empty.bin"), b"").unwrap();
+
+        let result = read_project_file_b64(
+            root.to_str().unwrap().to_string(),
+            "empty.bin".to_string(),
+        );
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "");
+    }
+
+    #[test]
+    fn test_read_project_file_b64_not_found() {
+        let root = tmp_dir("b64_missing");
+        let result = read_project_file_b64(
+            root.to_str().unwrap().to_string(),
+            "missing.bin".to_string(),
+        );
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            AppError::NotFound(p) => assert_eq!(p, "missing.bin"),
+            e => panic!("expected NotFound, got {:?}", e),
+        }
+    }
+
+    #[test]
+    fn test_read_project_file_b64_binary_data() {
+        let root = tmp_dir("b64_binary");
+        let bytes: Vec<u8> = (0u8..=255u8).collect();
+        fs::write(root.join("binary.bin"), &bytes).unwrap();
+
+        let result = read_project_file_b64(
+            root.to_str().unwrap().to_string(),
+            "binary.bin".to_string(),
+        );
+        assert!(result.is_ok());
+        use base64::Engine as _;
+        let decoded = base64::engine::general_purpose::STANDARD
+            .decode(result.unwrap())
+            .unwrap();
+        assert_eq!(decoded, bytes);
+    }
+
+    // ── list_project_tree ─────────────────────────────────────────────────────
+
+    #[test]
+    fn test_list_project_tree_returns_entries() {
+        let root = tmp_dir("lpt_basic");
+        fs::create_dir(root.join("src")).unwrap();
+        fs::write(root.join("src").join("main.rs"), "fn main() {}").unwrap();
+        fs::write(root.join("README.md"), "# readme").unwrap();
+
+        let result = list_project_tree(root.to_str().unwrap().to_string());
+        assert!(result.is_ok());
+        let entries = result.unwrap();
+        let paths: Vec<&str> = entries.iter().map(|e| e.path.as_str()).collect();
+        assert!(paths.contains(&"src"));
+        assert!(paths.contains(&"src/main.rs"));
+        assert!(paths.contains(&"README.md"));
+    }
+
+    #[test]
+    fn test_list_project_tree_invalid_path() {
+        let result = list_project_tree("/nonexistent/path/that/does/not/exist".to_string());
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            AppError::InvalidPath(_) => {}
+            e => panic!("expected InvalidPath, got {:?}", e),
+        }
+    }
+
+    #[test]
+    fn test_list_project_tree_skips_explorer_skip_dirs() {
+        let root = tmp_dir("lpt_skip");
+        fs::create_dir(root.join("node_modules")).unwrap();
+        fs::write(root.join("node_modules").join("dep.js"), "").unwrap();
+        fs::create_dir(root.join("target")).unwrap();
+        fs::write(root.join("target").join("binary"), "").unwrap();
+        fs::write(root.join("app.js"), "").unwrap();
+
+        let result = list_project_tree(root.to_str().unwrap().to_string());
+        assert!(result.is_ok());
+        let entries = result.unwrap();
+        let paths: Vec<&str> = entries.iter().map(|e| e.path.as_str()).collect();
+
+        assert!(!paths.contains(&"node_modules"), "node_modules must be skipped");
+        assert!(!paths.contains(&"target"), "target must be skipped");
+        assert!(paths.contains(&"app.js"), "regular files must still appear");
+    }
+
+    #[test]
+    fn test_list_project_tree_empty_dir() {
+        let root = tmp_dir("lpt_empty");
+        let result = list_project_tree(root.to_str().unwrap().to_string());
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_list_project_tree_dirs_flagged_correctly() {
+        let root = tmp_dir("lpt_flags");
+        fs::create_dir(root.join("mydir")).unwrap();
+        fs::write(root.join("myfile.txt"), "").unwrap();
+
+        let entries = list_project_tree(root.to_str().unwrap().to_string()).unwrap();
+        let dir_entry  = entries.iter().find(|e| e.path == "mydir").unwrap();
+        let file_entry = entries.iter().find(|e| e.path == "myfile.txt").unwrap();
+        assert!(dir_entry.is_dir);
+        assert!(!file_entry.is_dir);
+    }
+}
