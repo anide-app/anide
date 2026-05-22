@@ -21,7 +21,8 @@
       "Bash(Format-Table -AutoSize)",
       "Bash(node -e \"const cm = require\\('./node_modules/codemirror/dist/index.cjs'\\); console.log\\('keymap' in cm, 'indentWithTab' in require\\('./node_modules/@codemirror/commands/dist/index.cjs'\\)\\)\")",
       "Bash(npm show *)",
-      "Bash(npm info *)"
+      "Bash(npm info *)",
+      "Bash(cloc *)"
     ]
   }
 }
