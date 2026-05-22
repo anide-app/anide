@@ -14,7 +14,15 @@
       "Bash(gh repo *)",
       "Bash(gh release *)",
       "PowerShell(gh release view v0.1.1 --repo anide-app/anide --json assets,isDraft,isPrerelease,tagName,name 2>&1)",
-      "WebFetch(domain:api.github.com)"
+      "WebFetch(domain:api.github.com)",
+      "Bash(Get-ChildItem -Path \"D:\\\\takerest\\\\gits\\\\takerest\" -Force)",
+      "Bash(Select-Object Name, Mode)",
+      "Bash(Select-Object Name, PSIsContainer)",
+      "Bash(Format-Table -AutoSize)",
+      "Bash(node -e \"const cm = require\\('./node_modules/codemirror/dist/index.cjs'\\); console.log\\('keymap' in cm, 'indentWithTab' in require\\('./node_modules/@codemirror/commands/dist/index.cjs'\\)\\)\")",
+      "Bash(npm show *)",
+      "Bash(npm info *)",
+      "Bash(cloc *)"
     ]
   }
 }

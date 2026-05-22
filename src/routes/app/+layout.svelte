@@ -42,6 +42,7 @@
   import TerminalTab from '$lib/components/workspace/TerminalTab.svelte';
   import FileTab from '$lib/components/workspace/FileTab.svelte';
   import DocTab from '$lib/components/workspace/DocTab.svelte';
+  import FilesPanel from '$lib/components/panels/FilesPanel.svelte';
   import TicTacToe from '$lib/components/TicTacToe.svelte';
 
   let gameOpen  = $state(false);
@@ -174,7 +175,7 @@
 
   const panelLabels = {
     docs: 'Docs', terminal: 'Terminal', api: 'API Requests', db: 'Databases', kv: 'Cache',
-    s3: 'Storage', git: 'Git', docker: 'Docker', env: 'Env Files',
+    s3: 'Storage', git: 'Git', docker: 'Docker', env: 'Env Files', files: 'Explorer',
   };
 
   import { GitBranch as GitBranchIcon, GitCommit, FileCode } from '@lucide/svelte';
@@ -305,6 +306,33 @@
           {/each}
         </nav>
 
+        <!-- File explorer toggle -->
+        <Tooltip.Root>
+          <Tooltip.Trigger>
+            {#snippet child({ props })}
+              <button
+                {...props}
+                type="button"
+                aria-label="Explorer"
+                onclick={() => workspace.setActiveTool('files')}
+                class="w-full h-10 flex items-center justify-center relative transition-colors duration-150
+                  {workspace.activeTool === 'files' && workspace.sidebarOpen
+                    ? 'text-foreground'
+                    : 'text-muted-foreground hover:text-foreground/80'}"
+              >
+                {#if workspace.activeTool === 'files' && workspace.sidebarOpen}
+                  <span class="absolute left-0 top-1.5 bottom-1.5 w-0.75 bg-primary rounded-r"></span>
+                {/if}
+                <FolderOpen
+                  size={20}
+                  strokeWidth={workspace.activeTool === 'files' && workspace.sidebarOpen ? 2.2 : 1.5}
+                />
+              </button>
+            {/snippet}
+          </Tooltip.Trigger>
+          <Tooltip.Content side="right">Explorer</Tooltip.Content>
+        </Tooltip.Root>
+
         <!-- Theme toggle -->
         <div class="pb-3 pt-1">
           <Themetoggle ghost={true} />
@@ -348,6 +376,8 @@
               <ApiPanel />
             {:else if workspace.activeTool === 'git'}
               <GitPanel />
+            {:else if workspace.activeTool === 'files'}
+              <FilesPanel />
             {:else if workspace.activeTool !== 'docker'}
               <StubPanel tool={workspace.activeTool} />
             {/if}

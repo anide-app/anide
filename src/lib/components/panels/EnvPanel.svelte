@@ -21,6 +21,8 @@
   let creating = $state(false);
   let createError = $state('');
 
+  let envClickTimer = null;
+
   let deleteTarget = $state(null);
   let deleteConfirmOpen = $state(false);
   let deleting = $state(false);
@@ -204,7 +206,8 @@
               <ContextMenu.Trigger class="block w-full">
                 <button
                   type="button"
-                  onclick={() => openEnvFile(node.file)}
+                  onclick={(e) => { clearTimeout(envClickTimer); if (e.detail === 1) envClickTimer = setTimeout(() => { envClickTimer = null; openEnvFile(node.file); }, 220); }}
+                  ondblclick={() => { clearTimeout(envClickTimer); envClickTimer = null; workspace.openTab({ id: `file-edit::${node.file.relPath}`, type: 'file-edit', title: node.file.name, data: { projectPath: workspace.folderPath, relPath: node.file.relPath, language: null } }); }}
                   class="w-full h-7 flex items-center justify-between gap-2 text-sm transition-colors
                     {isActive
                       ? 'bg-muted/70 text-foreground'
