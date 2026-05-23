@@ -24,6 +24,8 @@
       "Bash(npm info *)",
       "Bash(cloc *)",
       "Bash(dir D:takerestgitstakerest *)"
+      "Bash(git -C D:/takerest/gits/takerest show HEAD:src/lib/components/panels/FilesPanel.svelte)",
+      "Bash(git -C D:/takerest/gits/takerest show HEAD:src/routes/app/+layout.svelte)"
     ]
   }
 }

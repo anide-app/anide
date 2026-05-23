@@ -17,12 +17,15 @@
   import { revealItemInDir } from '@tauri-apps/plugin-opener';
 
   let envFiles = $state([]);
+  let gitStatusMap = $state(new Map());
   let listLoading = $state(false);
   let dialogOpen = $state(false);
   let newFileSuffix = $state('');
   let addToGitignore = $state(true);
   let creating = $state(false);
   let createError = $state('');
+
+  let envClickTimer = null;
 
   let deleteTarget = $state(null);
   let deleteConfirmOpen = $state(false);
@@ -215,68 +218,16 @@
         </Button>
       </div>
     {:else}
-      {#snippet renderNodes(nodes, depth)}
-        {#each nodes as node (node.type === 'dir' ? node.key : node.file.relPath)}
-          {#if node.type === 'dir'}
-            <button
-              type="button"
-              onclick={() => toggleDir(node.key)}
-              class="w-full h-7 flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
-              style="padding-left: {0.5 + depth * 1.1}rem; padding-right: 0.5rem"
-            >
-              {#if expanded.has(node.key)}
-                <ChevronDown size={13} class="shrink-0" />
-              {:else}
-                <ChevronRight size={13} class="shrink-0" />
-              {/if}
-              <span class="truncate font-medium">{node.name}</span>
-            </button>
-            {#if expanded.has(node.key)}
-              {@render renderNodes(node.children, depth + 1)}
-            {/if}
-          {:else}
-            {@const isActive = workspace.activeTabId === `env::${node.file.relPath}`}
-            <ContextMenu.Root>
-              <ContextMenu.Trigger class="block w-full">
-                <button
-                  type="button"
-                  onclick={() => openEnvFile(node.file)}
-                  class="w-full h-7 flex items-center justify-between gap-2 text-sm transition-colors
-                    {isActive
-                      ? 'bg-muted/70 text-foreground'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'}"
-                  style="padding-left: {0.9 + depth * 1.1}rem; padding-right: 0.5rem"
-                >
-                  <span class="truncate">{node.file.name}</span>
-                  {#if node.file.inGitignore}
-                    <ShieldCheck class="w-3.5 h-3.5 shrink-0 text-green-600/70" />
-                  {:else}
-                    <ShieldOff class="w-3.5 h-3.5 shrink-0 opacity-20" />
-                  {/if}
-                </button>
-              </ContextMenu.Trigger>
-              <ContextMenu.Content class="w-56">
-                <ContextMenu.Item onclick={() => handleToggleGitignore(node.file)}>
-                  {node.file.inGitignore ? 'Remove from .gitignore' : 'Add to .gitignore'}
-                </ContextMenu.Item>
-                <ContextMenu.Separator />
-                <ContextMenu.Item onclick={() => copyToClipboard(absPath(node.file.relPath))}>Copy file path</ContextMenu.Item>
-                <ContextMenu.Item onclick={() => copyToClipboard(node.file.relPath)}>Copy relative path</ContextMenu.Item>
-                <ContextMenu.Separator />
-                <ContextMenu.Item onclick={() => showInExplorer(node.file.relPath)}>Show in Explorer</ContextMenu.Item>
-                <ContextMenu.Separator />
-                <ContextMenu.Item
-                  class="text-destructive focus:text-destructive focus:bg-destructive/10"
-                  onclick={() => { deleteTarget = node.file; deleteConfirmOpen = true; }}
-                >
-                  Delete file
-                </ContextMenu.Item>
-              </ContextMenu.Content>
-            </ContextMenu.Root>
-          {/if}
-        {/each}
-      {/snippet}
-      {@render renderNodes(tree, 0)}
+      <FileTree
+        mode="env"
+        nodes={tree}
+        {gitStatusMap}
+        activeFile={workspace.activeTabId?.startsWith('env::') ? workspace.activeTabId.slice(5) : null}
+        projectPath={workspace.folderPath}
+        onFileClick={(node) => openEnvFile(node.envFile)}
+        onToggleGitignore={handleToggleGitignore}
+        onDelete={(envFile) => { deleteTarget = envFile; deleteConfirmOpen = true; }}
+      />
     {/if}
   </div>
 

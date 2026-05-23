@@ -109,9 +109,15 @@ pub fn run() {
             commands::watcher::unwatch_project,
             // file commands
             commands::files::read_project_file,
+            commands::files::read_project_file_b64,
+            commands::files::create_project_file,
+            commands::files::create_project_dir,
+            commands::files::delete_project_path,
+            commands::files::rename_project_path,
             commands::files::write_project_file,
             commands::files::list_doc_files,
             commands::files::delete_doc_file,
+            commands::files::list_project_tree,
             // docker commands
             commands::docker::docker_list_containers,
             commands::docker::docker_list_images,
