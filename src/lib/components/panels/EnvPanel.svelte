@@ -3,6 +3,7 @@
   import { workspace } from '$lib/stores/workspace.svelte.js';
   import { listEnvFiles, createEnvFile, deleteEnvFile, toggleEnvGitignore } from '$lib/commands/env';
   import { FileLock2, Plus, ShieldCheck, ShieldOff, Loader2, FileKey, ChevronRight, ChevronDown } from '@lucide/svelte';
+  import { FileLock2, Plus, ShieldCheck, ShieldOff, Loader2, FileKey, ChevronRight, ChevronDown } from '@lucide/svelte';
   import { Button } from '$lib/components/ui/button/index.js';
   import { Input } from '$lib/components/ui/input/index.js';
   import { Label } from '$lib/components/ui/label/index.js';
@@ -10,7 +11,9 @@
   import { Checkbox } from '$lib/components/ui/checkbox/index.js';
   import * as Dialog from '$lib/components/ui/dialog/index.js';
   import * as ContextMenu from '$lib/components/ui/context-menu/index.js';
+  import * as ContextMenu from '$lib/components/ui/context-menu/index.js';
   import * as AlertDialog from '$lib/components/ui/alert-dialog/index.js';
+  import { revealItemInDir } from '@tauri-apps/plugin-opener';
   import { revealItemInDir } from '@tauri-apps/plugin-opener';
 
   let envFiles = $state([]);
@@ -37,7 +40,16 @@
       listLoading = true;
       try {
         const files = await listEnvFiles(path);
+        const files = await listEnvFiles(path);
         envFiles = files;
+        const t = buildTree(files);
+        const addDirs = (nodes) => {
+          for (const node of nodes) {
+            if (node.type === 'dir') { expanded.add(node.key); addDirs(node.children); }
+          }
+        };
+        addDirs(t);
+        expanded = new Set(expanded);
         const t = buildTree(files);
         const addDirs = (nodes) => {
           for (const node of nodes) {
@@ -59,6 +71,20 @@
       title: file.name,
       data: { relPath: file.relPath, folderPath: workspace.folderPath },
     });
+  }
+
+  function absPath(relPath) {
+    const base = workspace.folderPath ?? '';
+    const sep = base.includes('\\') ? '\\' : '/';
+    return base.replace(/[/\\]$/, '') + sep + relPath.replace(/\//g, sep);
+  }
+
+  async function copyToClipboard(text) {
+    try { await navigator.clipboard.writeText(text); } catch {}
+  }
+
+  async function showInExplorer(relPath) {
+    try { await revealItemInDir(absPath(relPath)); } catch (e) { console.error(e); }
   }
 
   function absPath(relPath) {
@@ -97,6 +123,8 @@
 
   let expanded = $state(new Set());
 
+  let expanded = $state(new Set());
+
   function buildTree(files) {
     const root = [];
     const dirMap = new Map();
@@ -107,17 +135,24 @@
         const key = parts.slice(0, i + 1).join('/');
         if (!dirMap.has(key)) {
           const node = { type: 'dir', name: parts[i], key, children: [] };
+          const node = { type: 'dir', name: parts[i], key, children: [] };
           arr.push(node);
           dirMap.set(key, node);
         }
         arr = dirMap.get(key).children;
       }
       arr.push({ type: 'file', name: parts[parts.length - 1], file });
+      arr.push({ type: 'file', name: parts[parts.length - 1], file });
     }
     return root;
   }
 
   let tree = $derived(buildTree(envFiles));
+
+  function toggleDir(key) {
+    if (expanded.has(key)) expanded.delete(key); else expanded.add(key);
+    expanded = new Set(expanded);
+  }
 
   function toggleDir(key) {
     if (expanded.has(key)) expanded.delete(key); else expanded.add(key);
@@ -164,6 +199,7 @@
   </div>
 
   <!-- File tree -->
+  <div class="flex-1 overflow-y-auto py-1">
   <div class="flex-1 overflow-y-auto py-1">
     {#if listLoading}
       <div class="flex items-center justify-center py-8 text-muted-foreground">
