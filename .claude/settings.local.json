@@ -22,7 +22,9 @@
       "Bash(node -e \"const cm = require\\('./node_modules/codemirror/dist/index.cjs'\\); console.log\\('keymap' in cm, 'indentWithTab' in require\\('./node_modules/@codemirror/commands/dist/index.cjs'\\)\\)\")",
       "Bash(npm show *)",
       "Bash(npm info *)",
-      "Bash(cloc *)"
+      "Bash(cloc *)",
+      "Bash(git -C D:/takerest/gits/takerest show HEAD:src/lib/components/panels/FilesPanel.svelte)",
+      "Bash(git -C D:/takerest/gits/takerest show HEAD:src/routes/app/+layout.svelte)"
     ]
   }
 }

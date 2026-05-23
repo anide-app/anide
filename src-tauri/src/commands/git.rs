@@ -839,7 +839,16 @@ pub fn git_discard_file(project_path: String, rel_path: String) -> Result<(), Ap
     {
         return Ok(());
     }
-    run_git(&project_path, &["restore", "--staged", "--", &rel_path])
+    if run_git(&project_path, &["restore", "--staged", "--", &rel_path]).is_ok() {
+        return Ok(());
+    }
+    // Untracked / new files that git restore can't touch — delete from disk
+    let full = Path::new(&project_path).join(&rel_path);
+    if full.is_dir() {
+        fs::remove_dir_all(&full).map_err(|e| AppError::Other(e.to_string()))
+    } else {
+        fs::remove_file(&full).map_err(|e| AppError::Other(e.to_string()))
+    }
 }
 
 /// Append a pattern to the project's .gitignore, creating it if needed.

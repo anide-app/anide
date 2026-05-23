@@ -12,7 +12,7 @@
   import * as Dialog from '$lib/components/ui/dialog/index.js';
   import * as AlertDialog from '$lib/components/ui/alert-dialog/index.js';
   import * as ContextMenu from '$lib/components/ui/context-menu/index.js';
-  import GitFileTree from './GitFileTree.svelte';
+  import FileTree from './FileTree.svelte';
   import { Loader2, RefreshCw, CheckSquare, Square, AlertTriangle } from '@lucide/svelte';
 
   const RUST_LIMIT = 2000;
@@ -110,13 +110,13 @@
     for (const file of files) {
       const parts = file.path.split('/');
       if (parts.length === 1) {
-        root.push({ type: 'file', name: parts[0], path: file.path, file });
+        root.push({ type: 'file', name: parts[0], path: file.path, gitFile: file });
       } else {
         let arr = root;
         for (let i = 0; i < parts.length - 1; i++) {
           arr = getDir(parts, i, arr);
         }
-        arr.push({ type: 'file', name: parts[parts.length - 1], path: file.path, file });
+        arr.push({ type: 'file', name: parts[parts.length - 1], path: file.path, gitFile: file });
       }
     }
 
@@ -302,13 +302,14 @@
         <span class="text-xs">No changes</span>
       </div>
     {:else}
-      <GitFileTree
+      <FileTree
+        mode="git"
         nodes={tree}
         {activeFile}
         {projectPath}
-        onFileClick={handleFileClick}
-        onToggle={handleToggle}
-        onDiscard={async (file) => { await load(); }}
+        onFileClick={(node) => handleFileClick(node.gitFile)}
+        onToggle={(gitFile, shouldStage) => handleToggle(gitFile, shouldStage)}
+        onDiscard={async () => { await load(); }}
         onGitignore={async () => { await load(); }}
       />
     {/if}
