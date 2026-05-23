@@ -6,6 +6,22 @@
   import { workspace } from '$lib/stores/workspace.svelte.js';
   import { untrack } from 'svelte';
   import MarkdownEditor from '$lib/components/MarkdownEditor.svelte';
+
+  let editorRef = $state(null);
+
+  $effect(() => {
+    if (workspace.activeTabId === tabId) {
+      requestAnimationFrame(() => editorRef?.focus());
+    }
+  });
+
+  $effect(() => {
+    function onWindowFocus() {
+      if (workspace.activeTabId === tabId) requestAnimationFrame(() => editorRef?.focus());
+    }
+    window.addEventListener('focus', onWindowFocus);
+    return () => window.removeEventListener('focus', onWindowFocus);
+  });
   import FrontmatterEditor from '$lib/components/FrontmatterEditor.svelte';
   import { Loader2, XCircle, ChevronDown, ChevronRight, Tags } from '@lucide/svelte';
   // ChevronDown/Right used by fmButton snippet
@@ -122,6 +138,7 @@
 {:else}
   <div class="h-full flex flex-col overflow-hidden">
     <MarkdownEditor
+      bind:this={editorRef}
       content={body}
       title={relPath.split('/').pop()}
       onSave={handleSave}

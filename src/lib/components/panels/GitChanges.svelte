@@ -212,7 +212,15 @@
   }
 
   function handleFileClick(file) {
-    if (file.conflicted) return; // conflicted files open in system editor, not diff view
+    if (file.conflicted) {
+      workspace.openTab({
+        id: `conflict::${file.path}`,
+        type: 'conflict',
+        title: file.path.split('/').pop(),
+        data: { projectPath, relPath: file.path },
+      });
+      return;
+    }
     const staged = !!file.indexStatus;
     onOpenDiff(file, staged);
   }

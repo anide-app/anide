@@ -700,6 +700,11 @@ pub fn git_stash(project_path: String) -> Result<(), AppError> {
     run_git(&project_path, &["stash", "push", "--include-untracked", "-m", "anide: auto-stash"])
 }
 
+#[tauri::command]
+pub fn git_stash_pop(project_path: String) -> Result<(), AppError> {
+    run_git(&project_path, &["stash", "pop"])
+}
+
 /// Checkout carrying uncommitted changes to the new branch (git checkout <branch> -- keeps changes).
 #[tauri::command]
 pub fn git_checkout_force(project_path: String, branch: String) -> Result<(), AppError> {

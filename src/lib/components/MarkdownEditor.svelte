@@ -128,6 +128,8 @@
 
   onDestroy(() => { editor?.destroy(); editor = null; });
 
+  export function focus() { editor?.commands.focus(); }
+
   // Resync when parent swaps the content prop while the editor is mounted (guard: clean only)
   $effect(() => {
     const incoming = cleanMd(initialContent);

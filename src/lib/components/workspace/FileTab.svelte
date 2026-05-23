@@ -9,6 +9,22 @@
   import FileEditor from '$lib/components/FileEditor.svelte';
   import ImagePreview from '$lib/components/ImagePreview.svelte';
 
+  let editorRef = $state(null);
+
+  $effect(() => {
+    if (workspace.activeTabId === tabId && !isImage) {
+      requestAnimationFrame(() => editorRef?.focus());
+    }
+  });
+
+  $effect(() => {
+    function onWindowFocus() {
+      if (workspace.activeTabId === tabId && !isImage) requestAnimationFrame(() => editorRef?.focus());
+    }
+    window.addEventListener('focus', onWindowFocus);
+    return () => window.removeEventListener('focus', onWindowFocus);
+  });
+
   const IMAGE_EXTS = new Set([
     'png','jpg','jpeg','gif','svg','webp','bmp','ico','tiff','tif','avif','heic',
   ]);
@@ -62,6 +78,7 @@
   {/if}
 {:else}
   <FileEditor
+    bind:this={editorRef}
     {title}
     {load}
     {save}

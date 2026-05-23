@@ -90,6 +90,11 @@ export async function gitMergeAbort(projectPath) {
   return invoke("git_merge_abort", { projectPath });
 }
 
+/** @returns {Promise<void>} */
+export async function gitStashPop(projectPath) {
+  return invoke("git_stash_pop", { projectPath });
+}
+
 /**
  * @param {string} projectPath
  * @param {boolean} [force]

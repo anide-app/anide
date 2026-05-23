@@ -168,6 +168,8 @@
     view.dispatch({ effects: themeCompartment.reconfigure(isDark ? oneDark : []) });
   });
 
+  export function focus() { view?.focus(); }
+
   // ── Save ───────────────────────────────────────────────────────────────────
   async function handleSave() {
     if (!view || !isDirty || saving) return;

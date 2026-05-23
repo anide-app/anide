@@ -42,6 +42,8 @@
   import TerminalTab from '$lib/components/workspace/TerminalTab.svelte';
   import FileTab from '$lib/components/workspace/FileTab.svelte';
   import DocTab from '$lib/components/workspace/DocTab.svelte';
+  import ConflictTab from '$lib/components/workspace/ConflictTab.svelte';
+  import ExcalidrawTab from '$lib/components/workspace/ExcalidrawTab.svelte';
   import FilesPanel from '$lib/components/panels/FilesPanel.svelte';
   import TicTacToe from '$lib/components/TicTacToe.svelte';
 
@@ -178,16 +180,18 @@
     s3: 'Storage', git: 'Git', docker: 'Docker', env: 'Env Files', files: 'Explorer',
   };
 
-  import { GitBranch as GitBranchIcon, GitCommit, FileCode } from '@lucide/svelte';
+  import { GitBranch as GitBranchIcon, GitCommit, FileCode, Workflow, GitMerge } from '@lucide/svelte';
   const tabTypeIcons = {
     readme: FileText,
     doc: BookOpen,
+    excalidraw: Workflow,
     'env-file': FileKey,
     'git-diff': GitBranchIcon,
     'git-commit': GitCommit,
     'docker-logs': Terminal,
     'terminal': Terminal,
     'file-edit': FileCode,
+    'conflict': GitMerge,
   };
 
   let activeTab = $derived(workspace.tabs.find(t => t.id === workspace.activeTabId) ?? null);
@@ -473,6 +477,8 @@
         <div class="absolute inset-0 overflow-hidden {workspace.activeTabId === tab.id ? 'block' : 'hidden'}">
           {#if tab.type === 'doc'}
             <DocTab data={tab.data} tabId={tab.id} />
+          {:else if tab.type === 'excalidraw'}
+            <ExcalidrawTab data={tab.data} tabId={tab.id} />
           {:else if tab.type === 'readme'}
             <ReadmeTab data={tab.data} tabId={tab.id} />
           {:else if tab.type === 'env-file'}
@@ -491,6 +497,8 @@
             <TerminalTab data={tab.data} tabId={tab.id} />
           {:else if tab.type === 'file-edit'}
             <FileTab data={tab.data} tabId={tab.id} />
+          {:else if tab.type === 'conflict'}
+            <ConflictTab data={tab.data} tabId={tab.id} />
           {/if}
         </div>
       {/each}
