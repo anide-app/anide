@@ -826,9 +826,10 @@ pub fn git_discard_all(project_path: String) -> Result<(), AppError> {
     )
 }
 
-/// Discard changes to a file, restoring it to HEAD.
-/// For tracked files: restores staged + worktree from HEAD.
-/// For newly staged files not in HEAD: just unstages them.
+/// Discard changes to a file.
+/// - Tracked modified files: restored from HEAD.
+/// - Staged-new files: unstaged (file remains but is untracked).
+/// - Untracked new files: deleted from disk.
 #[tauri::command]
 pub fn git_discard_file(project_path: String, rel_path: String) -> Result<(), AppError> {
     if run_git(
@@ -839,7 +840,16 @@ pub fn git_discard_file(project_path: String, rel_path: String) -> Result<(), Ap
     {
         return Ok(());
     }
-    run_git(&project_path, &["restore", "--staged", "--", &rel_path])
+    if run_git(&project_path, &["restore", "--staged", "--", &rel_path]).is_ok() {
+        return Ok(());
+    }
+    // Untracked file — delete it from disk.
+    let full = Path::new(&project_path).join(&rel_path);
+    if full.is_dir() {
+        fs::remove_dir_all(&full).map_err(|e| AppError::Other(e.to_string()))
+    } else {
+        fs::remove_file(&full).map_err(|e| AppError::Other(e.to_string()))
+    }
 }
 
 /// Append a pattern to the project's .gitignore, creating it if needed.

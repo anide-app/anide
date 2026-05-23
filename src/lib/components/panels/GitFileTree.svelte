@@ -95,8 +95,6 @@
   {@const isActive = activeFile === file.path}
   {@const ext = getExt(node.name)}
   {@const dir = getDirPart(file.path)}
-  {@const canDiscard = !(file.worktreeStatus?.type === 'added' && !file.indexStatus)}
-
   <ContextMenu.Root>
     <ContextMenu.Trigger class="block w-full">
       <div
@@ -139,12 +137,10 @@
     </ContextMenu.Trigger>
 
     <ContextMenu.Content class="w-56">
-      {#if canDiscard}
-        <ContextMenu.Item class="text-destructive focus:text-destructive focus:bg-destructive/10" onclick={() => handleDiscard(file)}>
-          Discard changes
-        </ContextMenu.Item>
-        <ContextMenu.Separator />
-      {/if}
+      <ContextMenu.Item class="text-destructive focus:text-destructive focus:bg-destructive/10" onclick={() => handleDiscard(file)}>
+        Discard changes
+      </ContextMenu.Item>
+      <ContextMenu.Separator />
       <ContextMenu.Item onclick={() => handleIgnore(file.path)}>Ignore file</ContextMenu.Item>
       {#if dir}<ContextMenu.Item onclick={() => handleIgnore(dir + '/')}>Ignore folder</ContextMenu.Item>{/if}
       {#if ext}<ContextMenu.Item onclick={() => handleIgnore('*.' + ext)}>Ignore all .{ext} files</ContextMenu.Item>{/if}

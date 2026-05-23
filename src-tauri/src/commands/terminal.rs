@@ -175,6 +175,58 @@ pub fn terminal_list_shells() -> Vec<ShellInfo> {
     shells
 }
 
+// ── PATH augmentation ─────────────────────────────────────────────────────────
+// The built app is launched by the OS without a shell profile, so PATH only
+// contains registry/system entries. Augment it with common user-local tool
+// directories so CLIs installed via cargo, npm, scoop, brew, etc. are visible.
+fn augmented_path() -> String {
+    let current = std::env::var("PATH").unwrap_or_default();
+    let sep = if cfg!(target_os = "windows") { ";" } else { ":" };
+
+    let mut extras: Vec<String> = Vec::new();
+
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(appdata) = std::env::var("APPDATA") {
+            extras.push(format!(r"{appdata}\npm"));
+        }
+        if let Ok(local) = std::env::var("LOCALAPPDATA") {
+            extras.push(format!(r"{local}\pnpm"));
+        }
+        if let Ok(home) = std::env::var("USERPROFILE") {
+            extras.push(format!(r"{home}\.cargo\bin"));
+            extras.push(format!(r"{home}\scoop\shims"));
+            extras.push(format!(r"{home}\.local\bin"));
+            extras.push(format!(r"{home}\.bun\bin"));
+        }
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        if let Ok(home) = std::env::var("HOME") {
+            extras.push(format!("{home}/.cargo/bin"));
+            extras.push(format!("{home}/.local/bin"));
+            extras.push(format!("{home}/.bun/bin"));
+            extras.push(format!("{home}/.deno/bin"));
+        }
+        for p in ["/opt/homebrew/bin", "/opt/homebrew/sbin", "/usr/local/bin"] {
+            extras.push(p.to_string());
+        }
+    }
+
+    let existing: std::collections::HashSet<&str> = current.split(sep).collect();
+    let new_paths: Vec<String> = extras
+        .into_iter()
+        .filter(|p| !existing.contains(p.as_str()) && std::path::Path::new(p).exists())
+        .collect();
+
+    if new_paths.is_empty() {
+        current
+    } else {
+        format!("{}{sep}{}", current, new_paths.join(sep))
+    }
+}
+
 // ── PTY session management ────────────────────────────────────────────────────
 
 #[tauri::command]
@@ -213,6 +265,7 @@ pub fn terminal_create(
 
     cmd.env("TERM", "xterm-256color");
     cmd.env("COLORTERM", "truecolor");
+    cmd.env("PATH", augmented_path());
     if let Some(ref path) = cwd {
         if !path.is_empty() {
             cmd.cwd(path);
