@@ -22,8 +22,6 @@
   let creating = $state(false);
   let createError = $state('');
 
-  let envClickTimer = null;
-
   let deleteTarget = $state(null);
   let deleteConfirmOpen = $state(false);
   let deleting = $state(false);

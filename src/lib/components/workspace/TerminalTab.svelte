@@ -1,6 +1,6 @@
 <script>
   // @ts-nocheck
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, tick } from 'svelte';
   import { Terminal } from '@xterm/xterm';
   import { WebglAddon } from '@xterm/addon-webgl';
   import { FitAddon } from '@xterm/addon-fit';
@@ -117,10 +117,15 @@
       terminalWrite(data.sessionId, input).catch(() => {});
     });
 
-    // Refit + notify backend whenever the container is resized
+    window.addEventListener('focus', _onWindowFocus);
+
+    // Refit + notify backend whenever the container is resized.
+    // Guard against hidden tabs: display:none collapses dimensions to 0 and
+    // a fit() at 0 cols would corrupt the PTY's line-wrap state.
     _ro = new ResizeObserver(() => {
       requestAnimationFrame(() => {
         if (!_mounted || !_fit || !_term) return;
+        if (!containerEl.offsetWidth || !containerEl.offsetHeight) return;
         _fit.fit();
         terminalResize(data.sessionId, _term.cols, _term.rows).catch(() => {});
       });
@@ -134,17 +139,33 @@
     _ro?.disconnect();
     _unlistenData?.();
     _unlistenExit?.();
+    window.removeEventListener('focus', _onWindowFocus);
     terminalClose(data.sessionId).catch(() => {});
     _webgl?.dispose();
     _term?.dispose();
   });
 
-  // Refit when this tab becomes active — container may have resized while hidden
+  function _onWindowFocus() {
+    if (_mounted && _term && workspace.activeTabId === tabId) _term.focus();
+  }
+
+  // Refit + focus when this tab becomes active.
+  // tick() waits for Svelte to flush the display:none→block class change, then
+  // double-rAF gives the browser time to compute layout before fit() reads dimensions.
   $effect(() => {
     if (workspace.activeTabId === tabId && _fit && _term) {
-      requestAnimationFrame(() => {
-        _fit?.fit();
-        if (_term) terminalResize(data.sessionId, _term.cols, _term.rows).catch(() => {});
+      tick().then(() => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            if (!_mounted || !_fit || !_term) return;
+            if (workspace.activeTabId !== tabId) return;
+            _fit.fit();
+            if (_term.cols > 0 && _term.rows > 0) {
+              terminalResize(data.sessionId, _term.cols, _term.rows).catch(() => {});
+              _term.focus();
+            }
+          });
+        });
       });
     }
   });

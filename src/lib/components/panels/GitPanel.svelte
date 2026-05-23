@@ -4,7 +4,7 @@
   import { workspace } from '$lib/stores/workspace.svelte.js';
   import {
     gitBranches, gitCheckoutBranch, gitCreateBranch, gitFetch, gitRemoteStatus,
-    gitPush, gitPull, gitPublishBranch, gitDeleteBranch,
+    gitPush, gitPull, gitPublishBranch, gitDeleteBranch, gitStashPop,
   } from '$lib/commands/git.js';
   import { ArrowDown as ArrowDownIcon } from '@lucide/svelte';
   import { Button } from '$lib/components/ui/button/index.js';
@@ -40,7 +40,12 @@
   let publishError = $state('');
   let pushBehindOpen = $state(false); // warn dialog: need to pull first
 
-  // Stash dialog
+  // Stash-and-pull dialog (shown when pull fails due to local changes)
+  let pullStashOpen = $state(false);
+  let pullStashBusy = $state(false);
+  let pullStashError = $state('');
+
+  // Stash dialog (branch switching)
   let stashOpen = $state(false);
   let stashTargetBranch = $state('');
   let stashError = $state('');
@@ -91,9 +96,43 @@
       await gitPull(projectPath);
       await loadRemoteStatus();
       await loadBranches();
-      bumpRefresh(); // reload history + changes
-    } catch (e) { pullError = e?.message ?? String(e); }
+      bumpRefresh();
+    } catch (e) {
+      const msg = e?.message ?? String(e);
+      if (msg.includes('local changes') || msg.includes('overwritten by merge') || msg.includes('Please commit') || msg.includes('Please move or remove')) {
+        pullStashOpen = true; pullStashError = '';
+      } else {
+        pullError = msg;
+      }
+    }
     finally { pulling = false; }
+  }
+
+  async function handleStashAndPull() {
+    pullStashBusy = true; pullStashError = '';
+    try {
+      await invoke('git_stash', { projectPath });
+      try {
+        await gitPull(projectPath);
+      } catch (pullErr) {
+        // Pull failed after stash — try to restore stashed changes so user loses nothing
+        try {
+          await gitStashPop(projectPath);
+        } catch (stashErr) {
+          throw new Error(`Pull failed: ${pullErr?.message ?? pullErr}\n\nAlso failed to restore stash: ${stashErr?.message ?? stashErr}`);
+        }
+        throw pullErr;
+      }
+      await gitStashPop(projectPath);
+      pullStashOpen = false;
+      await loadRemoteStatus();
+      await loadBranches();
+      bumpRefresh();
+    } catch (e) {
+      pullStashError = e?.message ?? String(e);
+    } finally {
+      pullStashBusy = false;
+    }
   }
 
   async function handlePush() {
@@ -364,7 +403,10 @@
         </div>
         <div class="flex-1"></div>
         {#if fetchError || pushError || pullError}
-          <span class="text-[10px] text-destructive truncate max-w-20" title={fetchError || pushError || pullError}>failed</span>
+          <span
+            class="text-[10px] text-destructive truncate max-w-32 cursor-help"
+            title={fetchError || pushError || pullError}
+          >{(fetchError || pushError || pullError).split('\n')[0].slice(0, 48) || 'failed'}</span>
         {/if}
         {#if remoteStatus.behind > 0}
           <button
@@ -546,6 +588,31 @@
       <Button onclick={handleCreateBranch} disabled={!sanitizedBranchName || creatingBranch}>
         {#if creatingBranch}<Loader2 size={13} class="mr-1.5 animate-spin" />{/if}
         Create branch
+      </Button>
+    </Dialog.Footer>
+  </Dialog.Content>
+</Dialog.Root>
+
+<!-- Stash-and-pull dialog -->
+<Dialog.Root bind:open={pullStashOpen}>
+  <Dialog.Content class="sm:max-w-sm">
+    <Dialog.Header>
+      <Dialog.Title>Uncommitted changes block pull</Dialog.Title>
+      <Dialog.Description>
+        Git can't pull because your local changes to one or more files would be overwritten.
+        Stash your changes, pull, then restore them automatically.
+      </Dialog.Description>
+    </Dialog.Header>
+    {#if pullStashError}
+      <p class="text-xs text-destructive bg-destructive/10 border border-destructive/20 rounded px-3 py-2 whitespace-pre-wrap break-all">{pullStashError}</p>
+    {/if}
+    <Dialog.Footer class="flex-col gap-2 sm:flex-col">
+      <Button class="w-full" onclick={handleStashAndPull} disabled={pullStashBusy}>
+        {#if pullStashBusy}<Loader2 size={13} class="mr-1.5 animate-spin" />{/if}
+        Stash, pull &amp; restore
+      </Button>
+      <Button variant="ghost" class="w-full" onclick={() => { pullStashOpen = false; pullStashError = ''; }} disabled={pullStashBusy}>
+        Cancel
       </Button>
     </Dialog.Footer>
   </Dialog.Content>

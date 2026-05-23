@@ -700,6 +700,11 @@ pub fn git_stash(project_path: String) -> Result<(), AppError> {
     run_git(&project_path, &["stash", "push", "--include-untracked", "-m", "anide: auto-stash"])
 }
 
+#[tauri::command]
+pub fn git_stash_pop(project_path: String) -> Result<(), AppError> {
+    run_git(&project_path, &["stash", "pop"])
+}
+
 /// Checkout carrying uncommitted changes to the new branch (git checkout <branch> -- keeps changes).
 #[tauri::command]
 pub fn git_checkout_force(project_path: String, branch: String) -> Result<(), AppError> {
@@ -826,9 +831,10 @@ pub fn git_discard_all(project_path: String) -> Result<(), AppError> {
     )
 }
 
-/// Discard changes to a file, restoring it to HEAD.
-/// For tracked files: restores staged + worktree from HEAD.
-/// For newly staged files not in HEAD: just unstages them.
+/// Discard changes to a file.
+/// - Tracked modified files: restored from HEAD.
+/// - Staged-new files: unstaged (file remains but is untracked).
+/// - Untracked new files: deleted from disk.
 #[tauri::command]
 pub fn git_discard_file(project_path: String, rel_path: String) -> Result<(), AppError> {
     if run_git(
@@ -842,7 +848,6 @@ pub fn git_discard_file(project_path: String, rel_path: String) -> Result<(), Ap
     if run_git(&project_path, &["restore", "--staged", "--", &rel_path]).is_ok() {
         return Ok(());
     }
-    // Untracked / new files that git restore can't touch — delete from disk
     let full = Path::new(&project_path).join(&rel_path);
     if full.is_dir() {
         fs::remove_dir_all(&full).map_err(|e| AppError::Other(e.to_string()))

@@ -11,6 +11,7 @@
   let loading = $state(true);
   let error = $state('');
   let gitStatusMap = $state(new Map());
+  let loadedPath = $state('');
 
   function buildTree(entries) {
     const root = [];
@@ -49,7 +50,8 @@
 
   async function load() {
     if (!projectPath) return;
-    loading = true; error = '';
+    if (loadedPath !== projectPath) loading = true;
+    error = '';
     try {
       const [docFiles, statusResult] = await Promise.all([
         listDocFiles(projectPath),
@@ -59,6 +61,7 @@
       gitStatusMap = new Map(
         statusResult.files.map(f => [f.path, f.indexStatus?.type ?? f.worktreeStatus?.type])
       );
+      loadedPath = projectPath;
     } catch (e) {
       error = e?.message ?? String(e);
     } finally {
@@ -75,9 +78,10 @@
 
   function openFile(relPath) {
     const fileName = relPath.split('/').pop();
+    const isFlow = relPath.endsWith('.excalidraw');
     workspace.openTab({
-      id: `doc::${relPath}`,
-      type: 'doc',
+      id: `${isFlow ? 'excalidraw' : 'doc'}::${relPath}`,
+      type: isFlow ? 'excalidraw' : 'doc',
       title: fileName,
       data: { relPath, folderPath: projectPath },
     });
@@ -105,7 +109,10 @@
         mode="docs"
         nodes={tree}
         {gitStatusMap}
-        activeFile={workspace.activeTabId?.startsWith('doc::') ? workspace.activeTabId.slice(5) : null}
+        activeFile={
+          workspace.activeTabId?.startsWith('doc::') ? workspace.activeTabId.slice(5) :
+          workspace.activeTabId?.startsWith('excalidraw::') ? workspace.activeTabId.slice(12) : null
+        }
         {projectPath}
         onFileClick={(node) => openFile(node.path)}
         onRefresh={load}

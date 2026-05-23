@@ -2,6 +2,7 @@
 @import "tw-animate-css";
 @import "shadcn-svelte/tailwind.css";
 @import "@fontsource-variable/inter";
+@import "@excalidraw/excalidraw/index.css";
 
 @custom-variant dark (&:is(.dark *));
 @plugin '@tailwindcss/forms';

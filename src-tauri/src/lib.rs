@@ -78,6 +78,7 @@ pub fn run() {
             commands::git::git_checkout_branch,
             commands::git::git_create_branch,
             commands::git::git_stash,
+            commands::git::git_stash_pop,
             commands::git::git_checkout_force,
             commands::git::git_fetch,
             commands::git::git_pull,

@@ -27,7 +27,7 @@
     onToggleGitignore,
   } = $props();
 
-  import { ChevronRight, ChevronDown, Folder, FolderOpen, FileText, ShieldCheck, ShieldOff, FilePlus, FolderPlus, Loader2 } from '@lucide/svelte';
+  import { ChevronRight, ChevronDown, Folder, FolderOpen, FileText, ShieldCheck, ShieldOff, FilePlus, FolderPlus, Loader2, Workflow } from '@lucide/svelte';
   import * as ContextMenu from '$lib/components/ui/context-menu/index.js';
   import * as AlertDialog from '$lib/components/ui/alert-dialog/index.js';
   import { gitDiscardFile, gitAddToGitignore, openFileDefault } from '$lib/commands/git.js';
@@ -117,20 +117,32 @@
     if (!creating || !inputVal.trim()) { creating = null; return; }
     const { parentPath, type } = creating;
     let name = inputVal.trim();
-    if (type === 'file' && mode === 'docs' && !name.includes('.')) name += '.md';
+    if (type === 'excalidraw') {
+      if (!name.endsWith('.excalidraw')) name += '.excalidraw';
+    } else if (type === 'file' && mode === 'docs' && !name.includes('.')) {
+      name += '.md';
+    }
     const relPath = parentPath ? `${parentPath}/${name}` : name;
     creating = null; inputVal = '';
     try {
-      if (type === 'file') {
-        await createProjectFile(projectPath, relPath);
-        if (mode === 'docs') {
-          workspace.openTab({ id: `doc::${relPath}`, type: 'doc', title: name, data: { relPath, folderPath: projectPath } });
-        }
-      } else {
+      if (type === 'dir') {
         await createProjectDir(projectPath, relPath);
+      } else {
+        await createProjectFile(projectPath, relPath);
+        if (mode === 'docs') openDocFile(relPath, name);
       }
       onRefresh?.();
     } catch (e) { toast.error(e?.message ?? String(e)); }
+  }
+
+  function openDocFile(relPath, name) {
+    const isFlow = relPath.endsWith('.excalidraw');
+    workspace.openTab({
+      id: `${isFlow ? 'excalidraw' : 'doc'}::${relPath}`,
+      type: isFlow ? 'excalidraw' : 'doc',
+      title: name ?? relPath.split('/').pop(),
+      data: { relPath, folderPath: projectPath },
+    });
   }
 
   function startRename(path, isDir) {
@@ -244,6 +256,8 @@
     {/each}
     {#if node.createType === 'dir'}
       <FolderPlus size={12} class="shrink-0 text-amber-400/80" />
+    {:else if node.createType === 'excalidraw'}
+      <Workflow size={12} class="shrink-0 opacity-60" />
     {:else}
       <FilePlus size={12} class="shrink-0 opacity-60" />
     {/if}
@@ -252,7 +266,7 @@
       bind:value={inputVal}
       onkeydown={handleInputKey}
       onblur={cancelInput}
-      placeholder={node.createType === 'dir' ? 'folder name' : 'doc name'}
+      placeholder={node.createType === 'dir' ? 'folder name' : node.createType === 'excalidraw' ? 'flow name' : 'doc name'}
       class="flex-1 min-w-0 bg-muted/60 border border-primary/40 rounded px-1.5 py-0 text-xs
              outline-none focus:border-primary text-foreground placeholder:text-muted-foreground/50"
     />
@@ -447,6 +461,9 @@
         <ContextMenu.Item onclick={() => startCreate(node.path, 'file')}>
           <FilePlus size={13} class="mr-2 opacity-60" />New Doc
         </ContextMenu.Item>
+        <ContextMenu.Item onclick={() => startCreate(node.path, 'excalidraw')}>
+          <Workflow size={13} class="mr-2 opacity-60" />Add Flow
+        </ContextMenu.Item>
         <ContextMenu.Item onclick={() => startCreate(node.path, 'dir')}>
           <FolderPlus size={13} class="mr-2 opacity-60" />New Folder
         </ContextMenu.Item>
@@ -498,6 +515,9 @@
     <ContextMenu.Content class="w-52">
       <ContextMenu.Item onclick={() => startCreate('', 'file')}>
         <FilePlus size={13} class="mr-2 opacity-60" />New Doc
+      </ContextMenu.Item>
+      <ContextMenu.Item onclick={() => startCreate('', 'excalidraw')}>
+        <Workflow size={13} class="mr-2 opacity-60" />Add Flow
       </ContextMenu.Item>
       <ContextMenu.Item onclick={() => startCreate('', 'dir')}>
         <FolderPlus size={13} class="mr-2 opacity-60" />New Folder
