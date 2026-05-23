@@ -64,7 +64,7 @@
 
   async function discard() {
     let fileData;
-    try { fileData = await parseFile(); } catch { return; }
+    try { fileData = await parseFile(); } catch (err) { toast.error(`Failed to discard: ${err?.message ?? String(err)}`); return; }
     changeGuard = 2;
     excalidrawAPI?.updateScene({
       elements: fileData.elements ?? [],
