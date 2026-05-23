@@ -70,6 +70,8 @@
       elements: fileData.elements ?? [],
       appState: fileData.appState ?? {},
     });
+    const savedFiles = Object.values(fileData.files ?? {});
+    if (savedFiles.length > 0) excalidrawAPI?.addFiles(savedFiles);
     workspace.setTabDirty(tabId, false);
   }
 
