@@ -14,10 +14,41 @@
    * onCancel — optional callback. When provided a "Cancel" button appears in the
    * header so the parent can switch away from edit mode without saving.
    */
-  let { title, load, save: saveFn, language = undefined, icon: Icon = null, onCancel = null, onDirtyChange = null } = $props();
+  let { title, load, save: saveFn, language = undefined, icon: Icon = null, onCancel = null, onDirtyChange = null, externalChangeTick = 0 } = $props();
 
   import { EditorView, basicSetup } from 'codemirror';
+  import { keymap } from '@codemirror/view';
+  import { indentWithTab } from '@codemirror/commands';
   import { Compartment } from '@codemirror/state';
+  import { LanguageDescription, StreamLanguage } from '@codemirror/language';
+
+  const envLanguage = StreamLanguage.define({
+    startState: () => ({ inValue: false }),
+    token(stream, state) {
+      if (stream.sol()) state.inValue = false;
+      if (stream.eatSpace()) return null;
+      if (!state.inValue) {
+        if (stream.peek() === '#') { stream.skipToEnd(); return 'comment'; }
+        if (stream.match(/^export(?=\s)/)) return 'keyword';
+        if (stream.match(/^[A-Za-z_][A-Za-z0-9_.]*(?==)/)) return 'variableName';
+        if (stream.eat('=')) { state.inValue = true; return 'operator'; }
+      } else {
+        const q = stream.peek();
+        if (q === '"' || q === "'") {
+          stream.next();
+          while (!stream.eol()) {
+            const c = stream.next();
+            if (c === '\\') stream.next();
+            else if (c === q) break;
+          }
+          return 'string';
+        }
+        if (!stream.eol()) { stream.skipToEnd(); return 'string'; }
+      }
+      stream.next();
+      return null;
+    },
+  });
   import { yaml } from '@codemirror/lang-yaml';
   import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
   import { languages } from '@codemirror/language-data';
@@ -27,6 +58,8 @@
   import { Save, Undo2, X, Loader2, AlertTriangle, FileCode } from '@lucide/svelte';
 
   const themeCompartment = new Compartment();
+  const langCompartment  = new Compartment();
+  let   langLoadSeq      = 0; // per-instance, cancels stale async loads
 
   let resolvedLang = $derived(language !== undefined ? language : detectLang(title));
 
@@ -70,7 +103,8 @@
       doc: savedContent,
       extensions: [
         basicSetup,
-        getLangExt(resolvedLang),
+        keymap.of([indentWithTab]),
+        langCompartment.of(getSyncLangExt(resolvedLang)),
         EditorView.theme({
           '&':                   { height: '100%', backgroundColor: 'transparent', color: 'var(--foreground)', fontFamily: 'Geist Mono, ui-monospace, monospace', fontSize: '13px' },
           '.cm-content':         { padding: '1rem 0.5rem', lineHeight: '1.65' },
@@ -88,6 +122,16 @@
       parent: editorEl,
     });
 
+    // Async syntax highlighting for non-yaml/markdown files
+    if (resolvedLang !== 'yaml' && resolvedLang !== 'markdown') {
+      const seq = ++langLoadSeq;
+      loadLangFor(title).then(ext => {
+        if (ext && langLoadSeq === seq && view) {
+          view.dispatch({ effects: langCompartment.reconfigure(ext) });
+        }
+      });
+    }
+
     return () => { view?.destroy(); view = null; };
   });
 
@@ -98,6 +142,23 @@
     const d = isDirty;
     untrack(() => onDirtyChange?.(d));
     return () => untrack(() => onDirtyChange?.(false));
+  });
+
+  // Auto-reload when the file changes on disk and the tab has no unsaved edits.
+  // Uses loadSeq so a stale response never overwrites a newer one.
+  $effect(() => {
+    const tick = externalChangeTick;
+    if (!tick) return;
+    if (untrack(() => loading || isDirty)) return;
+    const req = ++loadSeq;
+    untrack(() => load())
+      .then(c => {
+        if (req !== loadSeq) return;
+        savedContent = c;
+        originalContent = c;
+        if (view) view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: c } });
+      })
+      .catch(() => {});
   });
 
   // Hot-swap dark/light theme
@@ -145,10 +206,26 @@
     return null;
   }
 
-  function getLangExt(lang) {
+  // Synchronous: only yaml/markdown have instant support; everything else waits for async load
+  function getSyncLangExt(lang) {
     if (lang === 'yaml')     return yaml();
     if (lang === 'markdown') return markdown({ base: markdownLanguage, codeLanguages: languages });
     return [];
+  }
+
+  // Async: match filename against language-data registry (covers JS, TS, Rust, Go, Python, CSS, …)
+  // .svelte is not in language-data; HTML mode handles <script>/<style>/template well.
+  function loadLangFor(filename) {
+    const ext = filename?.split('.').pop()?.toLowerCase();
+    if (ext === 'svelte') {
+      return import('codemirror-lang-svelte').then(m => m.svelte()).catch(() => null);
+    }
+    const base = filename?.split(/[\\/]/).pop() ?? '';
+    if (base.toLowerCase().startsWith('.env')) {
+      return Promise.resolve(envLanguage);
+    }
+    const desc = LanguageDescription.matchFilename(languages, filename);
+    return desc ? desc.load().catch(() => null) : Promise.resolve(null);
   }
 </script>
 

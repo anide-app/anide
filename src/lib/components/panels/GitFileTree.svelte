@@ -6,6 +6,17 @@
   import * as ContextMenu from '$lib/components/ui/context-menu/index.js';
   import { gitDiscardFile, gitAddToGitignore, openFileDefault } from '$lib/commands/git.js';
   import { revealItemInDir } from '@tauri-apps/plugin-opener';
+  import { workspace } from '$lib/stores/workspace.svelte.js';
+
+  function openInFileViewer(relPath) {
+    const name = relPath.split('/').pop() ?? relPath;
+    workspace.openTab({
+      id: `file-edit::${relPath}`,
+      type: 'file-edit',
+      title: name,
+      data: { projectPath, relPath, language: null },
+    });
+  }
 
   // ── Virtual list ──────────────────────────────────────────────────────────────
   const ROW_H  = 28;   // must match row CSS (h-7)
@@ -113,7 +124,7 @@
             {file.conflicted ? 'text-red-500 dark:text-red-400' : isActive ? 'text-foreground' : 'text-muted-foreground group-hover:text-foreground'}
             {file.conflicted ? '' : NAME_COLOR[kind] ?? ''}"
           onclick={() => onFileClick(file)}
-          ondblclick={(e) => { e.stopPropagation(); openWithDefault(file.path); }}
+          ondblclick={(e) => { e.stopPropagation(); openInFileViewer(file.path); }}
         >
           {node.name}{#if file.conflicted}<span class="ml-1 text-[10px] font-bold opacity-70">!!</span>{/if}
         </button>

@@ -843,7 +843,6 @@ pub fn git_discard_file(project_path: String, rel_path: String) -> Result<(), Ap
     if run_git(&project_path, &["restore", "--staged", "--", &rel_path]).is_ok() {
         return Ok(());
     }
-    // Untracked file — delete it from disk.
     let full = Path::new(&project_path).join(&rel_path);
     if full.is_dir() {
         fs::remove_dir_all(&full).map_err(|e| AppError::Other(e.to_string()))
