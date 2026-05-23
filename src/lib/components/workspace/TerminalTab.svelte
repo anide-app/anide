@@ -158,9 +158,12 @@
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
             if (!_mounted || !_fit || !_term) return;
+            if (workspace.activeTabId !== tabId) return;
             _fit.fit();
-            terminalResize(data.sessionId, _term.cols, _term.rows).catch(() => {});
-            _term.focus();
+            if (_term.cols > 0 && _term.rows > 0) {
+              terminalResize(data.sessionId, _term.cols, _term.rows).catch(() => {});
+              _term.focus();
+            }
           });
         });
       });

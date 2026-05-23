@@ -27,13 +27,9 @@
   }
 
   async function parseFile() {
-    try {
-      const raw = await readProjectFile(data.folderPath, data.relPath);
-      if (!raw?.trim()) return { type: 'excalidraw', version: 2, elements: [], appState: {}, files: {} };
-      return JSON.parse(raw);
-    } catch {
-      return { type: 'excalidraw', version: 2, elements: [], appState: {}, files: {} };
-    }
+    const raw = await readProjectFile(data.folderPath, data.relPath);
+    if (!raw?.trim()) return { type: 'excalidraw', version: 2, elements: [], appState: {}, files: {} };
+    return JSON.parse(raw);
   }
 
   async function save() {
@@ -67,7 +63,8 @@
   }
 
   async function discard() {
-    const fileData = await parseFile();
+    let fileData;
+    try { fileData = await parseFile(); } catch { return; }
     changeGuard = 2;
     excalidrawAPI?.updateScene({
       elements: fileData.elements ?? [],
@@ -85,7 +82,14 @@
       import('@excalidraw/excalidraw'),
     ]);
 
-    const fileData = await parseFile();
+    let fileData;
+    try {
+      fileData = await parseFile();
+    } catch (err) {
+      loadError = err?.message ?? String(err);
+      loading = false;
+      return;
+    }
     changeGuard = 2; // skip the initial onChange burst
 
     if (mountRoot) mountRoot.unmount();

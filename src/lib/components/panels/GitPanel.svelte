@@ -115,8 +115,12 @@
       try {
         await gitPull(projectPath);
       } catch (pullErr) {
-        // Pull failed after stash — restore stashed changes so user loses nothing
-        await gitStashPop(projectPath).catch(() => {});
+        // Pull failed after stash — try to restore stashed changes so user loses nothing
+        try {
+          await gitStashPop(projectPath);
+        } catch (stashErr) {
+          throw new Error(`Pull failed: ${pullErr?.message ?? pullErr}\n\nAlso failed to restore stash: ${stashErr?.message ?? stashErr}`);
+        }
         throw pullErr;
       }
       await gitStashPop(projectPath);
