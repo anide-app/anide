@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -15,6 +16,18 @@ pub struct KVPair {
     pub value: String,
     pub enabled: bool,
 }
+
+/// A form body field — either text or a file path for multipart upload
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct FormParam {
+    pub key: String,
+    pub value: String,
+    /// "text" | "file"
+    #[serde(default = "default_form_type")]
+    pub param_type: String,
+    pub enabled: bool,
+}
+fn default_form_type() -> String { "text".to_string() }
 
 /// Auth configuration — tagged union serialized as { "type": "bearer", ... }
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -35,6 +48,17 @@ pub enum AuthConfig {
         #[serde(rename = "addTo")]
         add_to: String,
     },
+    #[serde(rename = "oauth2")]
+    OAuth2 {
+        grant_type: String,
+        token_url: String,
+        client_id: String,
+        client_secret: String,
+        scope: String,
+        /// Cached access token (not persisted to file)
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        access_token: Option<String>,
+    },
 }
 
 impl Default for AuthConfig {
@@ -53,12 +77,25 @@ pub struct RequestFrontmatter {
     pub headers: Vec<KVPair>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub params: Vec<KVPair>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub path_params: Vec<KVPair>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub form_params: Vec<FormParam>,
     #[serde(default)]
     pub auth: AuthConfig,
+    /// HTTP body type: "json" | "form" | "raw" | "graphql" | "none"
+    #[serde(default = "default_body_type", skip_serializing_if = "is_none_body_type")]
+    pub body_type: String,
+    /// The HTTP request body content (template strings allowed)
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub request_body: String,
 }
 
+fn default_body_type() -> String { "none".to_string() }
+fn is_none_body_type(s: &String) -> bool { s == "none" }
+
 /// Full request data sent to/from the frontend.
-/// Combines the frontmatter fields with the markdown body.
+/// Combines the frontmatter fields with the markdown body (notes).
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct RequestData {
     pub method: String,
@@ -68,10 +105,61 @@ pub struct RequestData {
     #[serde(default)]
     pub params: Vec<KVPair>,
     #[serde(default)]
+    pub path_params: Vec<KVPair>,
+    #[serde(default)]
+    pub form_params: Vec<FormParam>,
+    #[serde(default)]
     pub auth: AuthConfig,
-    /// Markdown body content (everything after the frontmatter `---`)
+    /// HTTP body type: "json" | "form" | "raw" | "graphql" | "none"
+    #[serde(default = "default_body_type")]
+    pub body_type: String,
+    /// The HTTP request body content (template strings allowed)
+    #[serde(default)]
+    pub request_body: String,
+    /// Markdown notes body (everything after the frontmatter `---`, purely documentation)
     #[serde(default)]
     pub body: String,
+}
+
+// ── HTTP execution types ──────────────────────────────────────────────────
+
+/// Input to send_request command
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SendRequestArgs {
+    pub project_path: String,
+    pub request: RequestData,
+    /// Flat map of env var key → value (resolved in priority order by frontend)
+    pub env_vars: HashMap<String, String>,
+    pub follow_redirects: bool,
+    pub timeout_ms: u32,
+}
+
+/// Response returned from send_request
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RequestResponse {
+    pub status: u16,
+    pub status_text: String,
+    pub headers: Vec<KVPair>,
+    pub body: String,
+    pub duration_ms: u64,
+    pub size_bytes: usize,
+}
+
+/// Result of resolve_template — resolved string plus token info for Variable Inspector
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResolvedTemplate {
+    pub resolved: String,
+    pub tokens: Vec<TokenInfo>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TokenInfo {
+    pub token: String,
+    pub value: Option<String>,
 }
 
 /// A node in the request tree (either a file or a folder)
@@ -81,7 +169,7 @@ pub enum RequestTreeNode {
     File {
         /// Display name (filename without .md)
         name: String,
-        /// Relative path from .takerest/requests/ (forward slashes)
+        /// Relative path from .anide/requests/ (forward slashes)
         path: String,
         /// HTTP method for quick display (parsed from frontmatter)
         method: String,
@@ -89,7 +177,7 @@ pub enum RequestTreeNode {
     Folder {
         /// Folder name
         name: String,
-        /// Relative path from .takerest/requests/ (forward slashes)
+        /// Relative path from .anide/requests/ (forward slashes)
         path: String,
         /// Children nodes (sorted: folders first, then files, alphabetically)
         children: Vec<RequestTreeNode>,
@@ -98,7 +186,7 @@ pub enum RequestTreeNode {
 
 // ── Commands ─────────────────────────────────────────────────────────────
 
-/// Ensures .takerest/requests/ exists. Creates if missing.
+/// Ensures .anide/requests/ exists. Creates if missing.
 /// Returns true if it already existed, false if it was just created.
 #[tauri::command]
 pub fn init_requests_dir(project_path: String) -> Result<bool, AppError> {
@@ -111,7 +199,7 @@ pub fn init_requests_dir(project_path: String) -> Result<bool, AppError> {
     }
 }
 
-/// Returns the full request tree from .takerest/requests/.
+/// Returns the full request tree from .anide/requests/.
 /// Folders become Folder nodes, .md files become File nodes.
 /// Sorted: folders first (alphabetical), then files (alphabetical).
 #[tauri::command]
@@ -129,7 +217,7 @@ pub fn get_request_tree(project_path: String) -> Result<Vec<RequestTreeNode>, Ap
 }
 
 /// Reads a single request file and returns parsed data.
-/// `request_path` is relative to .takerest/requests/, e.g. "auth/login.md"
+/// `request_path` is relative to .anide/requests/, e.g. "auth/login.md"
 #[tauri::command]
 pub fn read_request(project_path: String, request_path: String) -> Result<RequestData, AppError> {
     let full_path = resolve_request_path(&project_path, &request_path)?;
@@ -210,7 +298,7 @@ pub fn delete_request(project_path: String, request_path: String) -> Result<(), 
 
     fs::remove_file(&full_path)?;
 
-    // Clean up empty parent directories (up to .takerest/requests/)
+    // Clean up empty parent directories (up to .anide/requests/)
     let requests_dir = requests_dir_path(&project_path);
     let mut parent = full_path.parent();
     while let Some(dir) = parent {
@@ -270,7 +358,76 @@ pub fn duplicate_request(project_path: String, request_path: String) -> Result<S
     Ok(rel)
 }
 
-/// Creates a collection (folder) inside .takerest/requests/.
+/// Renames a request file within its current directory.
+/// `new_name` is just the stem (no .md needed). Returns the new relative path.
+#[tauri::command]
+pub fn rename_request(
+    project_path: String,
+    request_path: String,
+    new_name: String,
+) -> Result<String, AppError> {
+    let full_path = resolve_request_path(&project_path, &request_path)?;
+    if !full_path.exists() {
+        return Err(AppError::NotFound(format!("Request file not found: {}", request_path)));
+    }
+    let stem = new_name.trim();
+    if stem.is_empty() {
+        return Err(AppError::Other("Name cannot be empty".into()));
+    }
+    if stem.contains('/') || stem.contains('\\') {
+        return Err(AppError::InvalidPath("Name cannot contain path separators".into()));
+    }
+    let parent = full_path.parent().ok_or_else(|| AppError::Other("Invalid path".into()))?;
+    let new_filename = if stem.ends_with(".md") { stem.to_string() } else { format!("{}.md", stem) };
+    let new_full_path = parent.join(&new_filename);
+    if new_full_path.exists() {
+        return Err(AppError::AlreadyExists(format!("A request named '{}' already exists", stem)));
+    }
+    fs::rename(&full_path, &new_full_path)?;
+    let requests_dir = requests_dir_path(&project_path);
+    let rel = new_full_path
+        .strip_prefix(&requests_dir)
+        .unwrap_or(&new_full_path)
+        .to_string_lossy()
+        .replace('\\', "/");
+    Ok(rel)
+}
+
+/// Renames a collection (folder) within its current parent directory.
+/// `new_name` is the new folder name. Returns the new relative path.
+#[tauri::command]
+pub fn rename_collection(
+    project_path: String,
+    collection_path: String,
+    new_name: String,
+) -> Result<String, AppError> {
+    let requests_dir = requests_dir_path(&project_path);
+    let full_path = requests_dir.join(&collection_path);
+    if !full_path.exists() || !full_path.is_dir() {
+        return Err(AppError::NotFound(format!("Collection not found: {}", collection_path)));
+    }
+    let name = new_name.trim();
+    if name.is_empty() {
+        return Err(AppError::Other("Name cannot be empty".into()));
+    }
+    if name.contains('/') || name.contains('\\') {
+        return Err(AppError::InvalidPath("Name cannot contain path separators".into()));
+    }
+    let parent = full_path.parent().ok_or_else(|| AppError::Other("Invalid path".into()))?;
+    let new_full_path = parent.join(name);
+    if new_full_path.exists() {
+        return Err(AppError::AlreadyExists(format!("A collection named '{}' already exists", name)));
+    }
+    fs::rename(&full_path, &new_full_path)?;
+    let rel = new_full_path
+        .strip_prefix(&requests_dir)
+        .unwrap_or(&new_full_path)
+        .to_string_lossy()
+        .replace('\\', "/");
+    Ok(rel)
+}
+
+/// Creates a collection (folder) inside .anide/requests/.
 /// Supports nested paths, e.g. "auth/admin" creates auth/admin/ (and auth/ if needed).
 #[tauri::command]
 pub fn create_collection(project_path: String, collection_path: String) -> Result<(), AppError> {
@@ -281,7 +438,7 @@ pub fn create_collection(project_path: String, collection_path: String) -> Resul
             | std::path::Component::RootDir
             | std::path::Component::Prefix(_) => {
                 return Err(AppError::InvalidPath(
-                    "Collection path must be within .anide/requests/".to_string(),
+                    "Collection path must be within .anide/requests".to_string(),
                 ));
             }
             _ => {}
@@ -302,23 +459,126 @@ pub fn create_collection(project_path: String, collection_path: String) -> Resul
     if !canonical_target.starts_with(&canonical_requests) {
         let _ = fs::remove_dir_all(&full_path);
         return Err(AppError::InvalidPath(
-            "Collection path must be within .anide/requests/".to_string(),
+            "Collection path must be within .anide/requests".to_string(),
         ));
     }
 
     Ok(())
 }
 
+/// Send an HTTP request, resolving {{ENV_VAR}} template tokens before sending.
+/// Faker tokens must be resolved in the frontend before this is called.
+#[tauri::command]
+pub async fn send_request(args: SendRequestArgs) -> Result<RequestResponse, AppError> {
+    let req = resolve_request_templates(&args.request, &args.env_vars);
+
+    // Substitute path params in URL before parsing (e.g. :userId → "123")
+    let url_with_paths = substitute_path_params(&req.url, &req.path_params);
+
+    // Build URL and attach query params
+    let mut url = reqwest::Url::parse(&url_with_paths)
+        .map_err(|e| AppError::Other(format!("Invalid URL: {e}")))?;
+
+    {
+        let mut pairs = url.query_pairs_mut();
+        for p in &req.params {
+            if p.enabled && !p.key.is_empty() {
+                pairs.append_pair(&p.key, &p.value);
+            }
+        }
+    }
+
+    let redirect_policy = if args.follow_redirects {
+        reqwest::redirect::Policy::limited(10)
+    } else {
+        reqwest::redirect::Policy::none()
+    };
+
+    let client = reqwest::Client::builder()
+        .redirect(redirect_policy)
+        .timeout(std::time::Duration::from_millis(args.timeout_ms as u64))
+        .danger_accept_invalid_certs(false)
+        .build()?;
+
+    let method = reqwest::Method::from_bytes(req.method.to_uppercase().as_bytes())
+        .map_err(|e| AppError::Other(format!("Invalid HTTP method: {e}")))?;
+
+    let mut builder = client.request(method, url);
+
+    // Apply enabled headers
+    for h in &req.headers {
+        if h.enabled && !h.key.is_empty() {
+            builder = builder.header(h.key.as_str(), h.value.as_str());
+        }
+    }
+
+    // Apply auth (mutates builder + may add query param — handled separately)
+    builder = apply_auth(builder, &req.auth)?;
+
+    // Apply body — use form_params KV table when present, else fall back to request_body
+    if req.body_type == "form" && !req.form_params.is_empty() {
+        builder = apply_form_params(builder, &req.form_params).await?;
+    } else {
+        builder = apply_body(builder, &req.body_type, &req.request_body);
+    }
+
+    let start = std::time::Instant::now();
+    let response = builder.send().await?;
+    let duration_ms = start.elapsed().as_millis() as u64;
+
+    let status = response.status().as_u16();
+    let status_text = response
+        .status()
+        .canonical_reason()
+        .unwrap_or("")
+        .to_string();
+
+    let resp_headers: Vec<KVPair> = response
+        .headers()
+        .iter()
+        .map(|(k, v)| KVPair {
+            key: k.to_string(),
+            value: v.to_str().unwrap_or("<binary>").to_string(),
+            enabled: true,
+        })
+        .collect();
+
+    let body_bytes = response.bytes().await?;
+    let size_bytes = body_bytes.len();
+    let body = String::from_utf8_lossy(&body_bytes).to_string();
+
+    Ok(RequestResponse {
+        status,
+        status_text,
+        headers: resp_headers,
+        body,
+        duration_ms,
+        size_bytes,
+    })
+}
+
+/// Resolve a single template string against env vars and return token info.
+/// Pure function — no network, no file I/O.
+#[tauri::command]
+pub fn resolve_template(
+    template: String,
+    env_vars: HashMap<String, String>,
+) -> Result<ResolvedTemplate, AppError> {
+    let mut tokens = Vec::new();
+    let resolved = substitute_template(&template, &env_vars, &mut tokens);
+    Ok(ResolvedTemplate { resolved, tokens })
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────────
 
-/// Get the path to .takerest/requests/ directory.
+/// Get the path to .anide/requests/ directory.
 fn requests_dir_path(project_path: &str) -> PathBuf {
     Path::new(project_path)
         .join(".anide")
         .join("requests")
 }
 
-/// Resolve a request_path relative to .takerest/requests/ and validate it's safe.
+/// Resolve a request_path relative to .anide/requests/ and validate it's safe.
 fn resolve_request_path(project_path: &str, request_path: &str) -> Result<PathBuf, AppError> {
     let requests_dir = requests_dir_path(project_path);
     let full_path = requests_dir.join(request_path);
@@ -422,7 +682,11 @@ fn parse_request_file(content: &str) -> Result<RequestData, AppError> {
         url: fm.url,
         headers: fm.headers,
         params: fm.params,
+        path_params: fm.path_params,
+        form_params: fm.form_params,
         auth: fm.auth,
+        body_type: fm.body_type,
+        request_body: fm.request_body,
         body,
     })
 }
@@ -434,11 +698,258 @@ fn serialize_request_file(data: &RequestData) -> Result<String, AppError> {
         url: data.url.clone(),
         headers: data.headers.clone(),
         params: data.params.clone(),
+        path_params: data.path_params.clone(),
+        form_params: data.form_params.clone(),
         auth: data.auth.clone(),
+        body_type: data.body_type.clone(),
+        request_body: data.request_body.clone(),
     };
 
     let yaml_str = serde_yaml::to_string(&fm)?;
     Ok(frontmatter::serialize(&yaml_str, &data.body))
+}
+
+/// Replace all {{KEY}} tokens in `template` using `env_vars`.
+/// Unknown tokens and Faker/env-namespaced tokens are left as-is.
+fn substitute_template(
+    template: &str,
+    env_vars: &HashMap<String, String>,
+    tokens: &mut Vec<TokenInfo>,
+) -> String {
+    let mut result = String::with_capacity(template.len());
+    let mut rest = template;
+
+    while let Some(open) = rest.find("{{") {
+        result.push_str(&rest[..open]);
+        let after_open = &rest[open + 2..];
+        if let Some(close) = after_open.find("}}") {
+            let key = after_open[..close].trim();
+            // Faker and namespaced env tokens are resolved by the frontend — leave them
+            if key.starts_with("Faker.") || key.starts_with("env.") {
+                result.push_str("{{");
+                result.push_str(&after_open[..close]);
+                result.push_str("}}");
+                tokens.push(TokenInfo { token: key.to_string(), value: None });
+            } else if let Some(val) = env_vars.get(key) {
+                result.push_str(val);
+                tokens.push(TokenInfo { token: key.to_string(), value: Some(val.clone()) });
+            } else {
+                result.push_str("{{");
+                result.push_str(&after_open[..close]);
+                result.push_str("}}");
+                tokens.push(TokenInfo { token: key.to_string(), value: None });
+            }
+            rest = &after_open[close + 2..];
+        } else {
+            // No closing }} — emit {{ literally and continue
+            result.push_str("{{");
+            rest = after_open;
+        }
+    }
+    result.push_str(rest);
+    result
+}
+
+/// substitute without token collection — for internal use where we don't need the token list.
+fn sub(template: &str, env_vars: &HashMap<String, String>) -> String {
+    substitute_template(template, env_vars, &mut Vec::new())
+}
+
+/// Resolve all template strings in a RequestData, returning a new resolved copy.
+fn resolve_request_templates(
+    req: &RequestData,
+    env_vars: &HashMap<String, String>,
+) -> RequestData {
+    RequestData {
+        method: req.method.clone(),
+        url: sub(&req.url, env_vars),
+        headers: req
+            .headers
+            .iter()
+            .map(|h| KVPair { key: h.key.clone(), value: sub(&h.value, env_vars), enabled: h.enabled })
+            .collect(),
+        params: req
+            .params
+            .iter()
+            .map(|p| KVPair { key: p.key.clone(), value: sub(&p.value, env_vars), enabled: p.enabled })
+            .collect(),
+        path_params: req
+            .path_params
+            .iter()
+            .map(|p| KVPair { key: p.key.clone(), value: sub(&p.value, env_vars), enabled: p.enabled })
+            .collect(),
+        form_params: req
+            .form_params
+            .iter()
+            .map(|p| FormParam {
+                key: p.key.clone(),
+                value: sub(&p.value, env_vars),
+                param_type: p.param_type.clone(),
+                enabled: p.enabled,
+            })
+            .collect(),
+        auth: resolve_auth_templates(&req.auth, env_vars),
+        body_type: req.body_type.clone(),
+        request_body: sub(&req.request_body, env_vars),
+        body: req.body.clone(),
+    }
+}
+
+fn resolve_auth_templates(auth: &AuthConfig, env_vars: &HashMap<String, String>) -> AuthConfig {
+    match auth {
+        AuthConfig::None => AuthConfig::None,
+        AuthConfig::Basic { username, password } => AuthConfig::Basic {
+            username: sub(username, env_vars),
+            password: sub(password, env_vars),
+        },
+        AuthConfig::Bearer { token } => AuthConfig::Bearer {
+            token: sub(token, env_vars),
+        },
+        AuthConfig::ApiKey { key, value, add_to } => AuthConfig::ApiKey {
+            key: key.clone(),
+            value: sub(value, env_vars),
+            add_to: add_to.clone(),
+        },
+        AuthConfig::OAuth2 { grant_type, token_url, client_id, client_secret, scope, access_token } => {
+            AuthConfig::OAuth2 {
+                grant_type: grant_type.clone(),
+                token_url: sub(token_url, env_vars),
+                client_id: sub(client_id, env_vars),
+                client_secret: sub(client_secret, env_vars),
+                scope: scope.clone(),
+                access_token: access_token.clone(),
+            }
+        }
+    }
+}
+
+/// Apply auth config to a reqwest RequestBuilder.
+fn apply_auth(
+    builder: reqwest::RequestBuilder,
+    auth: &AuthConfig,
+) -> Result<reqwest::RequestBuilder, AppError> {
+    use base64::Engine as _;
+    match auth {
+        AuthConfig::None => Ok(builder),
+        AuthConfig::Bearer { token } => {
+            Ok(builder.header("Authorization", format!("Bearer {token}")))
+        }
+        AuthConfig::Basic { username, password } => {
+            let encoded = base64::engine::general_purpose::STANDARD
+                .encode(format!("{username}:{password}"));
+            Ok(builder.header("Authorization", format!("Basic {encoded}")))
+        }
+        AuthConfig::ApiKey { key, value, add_to } => {
+            if add_to == "header" {
+                Ok(builder.header(key.as_str(), value.as_str()))
+            } else {
+                // query — append to URL via the builder's query method
+                Ok(builder.query(&[(key.as_str(), value.as_str())]))
+            }
+        }
+        // OAuth2: if a cached access_token is present use it; otherwise tell the caller
+        // to exchange credentials first via a dedicated resolve_oauth2 command (future).
+        AuthConfig::OAuth2 { access_token, .. } => {
+            if let Some(tok) = access_token {
+                Ok(builder.header("Authorization", format!("Bearer {tok}")))
+            } else {
+                Err(AppError::Other(
+                    "OAuth2 access token not resolved. Fetch a token first.".to_string(),
+                ))
+            }
+        }
+    }
+}
+
+/// Replace :paramName segments in a URL with their resolved values.
+fn substitute_path_params(url: &str, path_params: &[KVPair]) -> String {
+    let mut result = url.to_string();
+    for p in path_params {
+        if p.enabled && !p.key.is_empty() {
+            result = result.replace(&format!(":{}", p.key), &p.value);
+        }
+    }
+    result
+}
+
+/// Build the request body from form_params: multipart/form-data when any file param
+/// exists, otherwise application/x-www-form-urlencoded.
+async fn apply_form_params(
+    builder: reqwest::RequestBuilder,
+    form_params: &[FormParam],
+) -> Result<reqwest::RequestBuilder, AppError> {
+    let has_file = form_params
+        .iter()
+        .any(|p| p.enabled && !p.key.is_empty() && p.param_type == "file");
+
+    if has_file {
+        let mut form = reqwest::multipart::Form::new();
+        for p in form_params {
+            if !p.enabled || p.key.is_empty() { continue; }
+            if p.param_type == "file" && !p.value.is_empty() {
+                let bytes = tokio::fs::read(&p.value).await.map_err(|e| {
+                    AppError::Other(format!("Cannot read file '{}': {e}", p.value))
+                })?;
+                let fname = std::path::Path::new(&p.value)
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .to_string();
+                let part = reqwest::multipart::Part::bytes(bytes).file_name(fname);
+                form = form.part(p.key.clone(), part);
+            } else if p.param_type != "file" {
+                form = form.text(p.key.clone(), p.value.clone());
+            }
+        }
+        Ok(builder.multipart(form))
+    } else {
+        // application/x-www-form-urlencoded using the urlencoding crate
+        let body = form_params
+            .iter()
+            .filter(|p| p.enabled && !p.key.is_empty() && p.param_type != "file")
+            .map(|p| {
+                format!(
+                    "{}={}",
+                    urlencoding::encode(&p.key),
+                    urlencoding::encode(&p.value)
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("&");
+        Ok(builder
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .body(body))
+    }
+}
+
+/// Apply the request body to a reqwest RequestBuilder based on body_type.
+fn apply_body(
+    builder: reqwest::RequestBuilder,
+    body_type: &str,
+    body: &str,
+) -> reqwest::RequestBuilder {
+    match body_type {
+        "json" => builder
+            .header("Content-Type", "application/json")
+            .body(body.to_string()),
+        "form" => builder
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .body(body.to_string()),
+        "graphql" => {
+            // Wrap query in {"query":"..."} if not already a JSON object
+            let json_body = if body.trim_start().starts_with('{') {
+                body.to_string()
+            } else {
+                let escaped = body.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n");
+                format!("{{\"query\":\"{escaped}\"}}")
+            };
+            builder
+                .header("Content-Type", "application/json")
+                .body(json_body)
+        }
+        "raw" => builder.body(body.to_string()),
+        _ => builder, // "none" or unknown — no body
+    }
 }
 
 /// Quick-parse only the HTTP method from a request file's frontmatter.

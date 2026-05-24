@@ -24,6 +24,12 @@ pub enum AppError {
     #[error("Git error: {0}")]
     Git(String),
 
+    #[error("HTTP error: {0}")]
+    Http(#[from] reqwest::Error),
+
+    #[error("Database error: {0}")]
+    Db(String),
+
     #[error("{0}")]
     Other(String),
 }

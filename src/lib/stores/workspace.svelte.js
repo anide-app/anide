@@ -48,9 +48,12 @@ function createWorkspace() {
     },
 
     openTab(tab) {
-      const existing = tabs.find(t => t.id === tab.id);
+      // For api-request tabs, deduplicate by relPath (id may be stale after rename)
+      const existing = tab.type === 'api-request'
+        ? tabs.find(t => t.type === 'api-request' && t.data?.relPath === tab.data?.relPath)
+        : tabs.find(t => t.id === tab.id);
       if (existing) {
-        activeTabId = tab.id;
+        activeTabId = existing.id;
         return;
       }
       tabs = [...tabs, tab];
@@ -89,6 +92,13 @@ function createWorkspace() {
       if (!tab) return;
       const trimmed = title.trim();
       tab.title = trimmed || tab.title;
+    },
+
+    updateApiRequestTab(oldRelPath, newRelPath, newTitle) {
+      const tab = tabs.find(t => t.type === 'api-request' && t.data?.relPath === oldRelPath);
+      if (!tab) return;
+      tab.title = newTitle.trim() || tab.title;
+      tab.data.relPath = newRelPath;
     },
 
     refreshEnvFiles() {
