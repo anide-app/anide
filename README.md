@@ -97,8 +97,12 @@ What's coming:
 
 Replaces: Postman, Insomnia, Bruno
 
-- [ ] REST, GraphQL, gRPC, WebSocket, SSE requests
-- [ ] Auth: Bearer/JWT, API Key, Basic, OAuth 2.0, mTLS
+- [x] REST requests
+- [ ] GraphQL requests
+- [ ] gRPC requests
+- [ ] WebSocket requests
+- [ ] SSE requests
+- [x] Auth: Bearer/JWT, API Key, Basic, OAuth 2.0
 - [x] Environment variables pulled from your `.env` files automatically
 - [x] Collections committed to Git alongside your code
 - [ ] Import from Postman JSON, OpenAPI, curl
@@ -107,7 +111,10 @@ Replaces: Postman, Insomnia, Bruno
 
 Replaces: DBeaver, TablePlus, MongoDB Compass
 
-- [ ] Connect to PostgreSQL, MySQL/MariaDB, SQLite, MongoDB
+- [ ] Connect to PostgreSQL
+- [ ] Connect to MySQL / MariaDB
+- [x] Connect to SQLite
+- [ ] Connect to MongoDB
 - [x] Write and run queries with results table
 - [x] Explore schema and table structure
 - [x] Edit rows directly
