@@ -1,4 +1,3 @@
-// @ts-nocheck
 pub mod drivers;
 
 use crate::error::AppError;
@@ -658,7 +657,22 @@ pub fn db_list_queries(project_path: String, name: String) -> Result<QueriesTree
 
 fn join_collection_path(base: PathBuf, collection: &str) -> PathBuf {
     // Walk components explicitly so forward-slash paths work correctly on Windows.
-    collection.split('/').fold(base, |acc, seg| if seg.is_empty() { acc } else { acc.join(seg) })
+    // Reject ".." and backslash-containing segments to prevent path traversal.
+    collection.split('/').fold(base, |acc, seg| {
+        if seg.is_empty() || seg == ".." || seg == "." || seg.contains('\\') {
+            acc
+        } else {
+            acc.join(seg)
+        }
+    })
+}
+
+fn validate_file_name(name: &str) -> Result<(), AppError> {
+    if name.contains('/') || name.contains('\\') || name == ".." || name == "." {
+        Err(AppError::InvalidPath(format!("Invalid file name: {name}")))
+    } else {
+        Ok(())
+    }
 }
 
 #[tauri::command]
@@ -677,6 +691,7 @@ pub fn db_save_query(project_path: String, name: String, query: QueryData) -> Re
 
 #[tauri::command]
 pub fn db_delete_query(project_path: String, conn_name: String, file_name: String, collection: Option<String>) -> Result<(), AppError> {
+    validate_file_name(&file_name)?;
     let base = queries_dir(&project_path, &conn_name);
     let path = match collection {
         Some(c) => join_collection_path(base, &c).join(&file_name),
@@ -709,6 +724,7 @@ pub fn db_rename_query(
     project_path: String, conn_name: String, file_name: String,
     collection: Option<String>, new_name: String,
 ) -> Result<String, AppError> {
+    validate_file_name(&file_name)?;
     let base = queries_dir(&project_path, &conn_name);
     let dir = match &collection { Some(c) => join_collection_path(base, c), None => base };
     let old_path = dir.join(&file_name);

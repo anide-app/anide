@@ -113,17 +113,19 @@
   async function menuDelete() {
     const node = menuNode; closeMenu();
     if (!node) return;
-    if (node.type === 'file') {
-      await deleteRequest(folderPath, node.path);
-    }
-    await load();
+    try {
+      if (node.type === 'file') await deleteRequest(folderPath, node.path);
+      await load();
+    } catch (e) { toast.error(e?.message ?? 'Delete failed'); }
   }
 
   async function menuDuplicate() {
     const node = menuNode; closeMenu();
     if (!node || node.type !== 'file') return;
-    await duplicateRequest(folderPath, node.path);
-    await load();
+    try {
+      await duplicateRequest(folderPath, node.path);
+      await load();
+    } catch (e) { toast.error(e?.message ?? 'Duplicate failed'); }
   }
 
   // ── New item ───────────────────────────────────────────────────────────────

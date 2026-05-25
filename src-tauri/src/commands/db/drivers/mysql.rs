@@ -188,7 +188,7 @@ impl DbConnection for MyConn {
     }
 
     async fn count_table(&self, database: &str, _schema: &str, table: &str) -> Result<u64, AppError> {
-        let sql = format!("SELECT COUNT(*) FROM `{}`.`{}`", database.replace('`', ""), table.replace('`', ""));
+        let sql = format!("SELECT COUNT(*) FROM `{}`.`{}`", database.replace('`', "``"), table.replace('`', "``"));
         let row = sqlx::query(&sql).fetch_one(&self.pool).await.map_err(|e| AppError::Db(e.to_string()))?;
         Ok(row.try_get::<i64, _>(0).unwrap_or(0) as u64)
     }

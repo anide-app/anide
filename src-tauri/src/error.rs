@@ -25,13 +25,20 @@ pub enum AppError {
     Git(String),
 
     #[error("HTTP error: {0}")]
-    Http(#[from] reqwest::Error),
+    Http(String),
 
     #[error("Database error: {0}")]
     Db(String),
 
     #[error("{0}")]
     Other(String),
+}
+
+impl From<reqwest::Error> for AppError {
+    fn from(e: reqwest::Error) -> Self {
+        // Strip the URL to avoid leaking request details in error messages.
+        AppError::Http(e.without_url().to_string())
+    }
 }
 
 // Required for Tauri IPC — errors must be serializable

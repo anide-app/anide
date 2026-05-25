@@ -406,6 +406,12 @@ pub fn rename_collection(
     if !full_path.exists() || !full_path.is_dir() {
         return Err(AppError::NotFound(format!("Collection not found: {}", collection_path)));
     }
+    // Verify the resolved path is actually inside requests_dir (prevents traversal).
+    let canonical_base = requests_dir.canonicalize()?;
+    let canonical_full = full_path.canonicalize()?;
+    if !canonical_full.starts_with(&canonical_base) {
+        return Err(AppError::InvalidPath("Path traversal denied".into()));
+    }
     let name = new_name.trim();
     if name.is_empty() {
         return Err(AppError::Other("Name cannot be empty".into()));

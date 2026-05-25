@@ -219,6 +219,8 @@ impl DbConnection for PgConn {
     }
 
     async fn count_table(&self, _database: &str, schema: &str, table: &str) -> Result<u64, AppError> {
+        let schema = schema.replace('"', "\"\"");
+        let table = table.replace('"', "\"\"");
         let sql = format!("SELECT COUNT(*) FROM \"{schema}\".\"{table}\"");
         let row = sqlx::query(&sql).fetch_one(&self.pool).await
             .map_err(|e| AppError::Db(e.to_string()))?;

@@ -48,9 +48,12 @@ function createWorkspace() {
     },
 
     openTab(tab) {
-      // For api-request tabs, deduplicate by relPath (id may be stale after rename)
+      // For api-request tabs, deduplicate by relPath (id may be stale after rename).
+      // Only match on relPath when both sides actually have a defined relPath; fall
+      // back to id-based matching if either is missing data or relPath.
       const existing = tab.type === 'api-request'
-        ? tabs.find(t => t.type === 'api-request' && t.data?.relPath === tab.data?.relPath)
+        && tab.data?.relPath !== undefined
+        ? tabs.find(t => t.type === 'api-request' && t.data?.relPath !== undefined && t.data.relPath === tab.data.relPath)
         : tabs.find(t => t.id === tab.id);
       if (existing) {
         activeTabId = existing.id;

@@ -21,6 +21,7 @@
 
   // Dragging a table node
   let dragNode = $state(null); // { name, ox, oy }
+  let containerEl = $state(null);
 
   const CARD_W = 200;
   const CARD_H_BASE = 32; // header
@@ -114,7 +115,9 @@
     if (tables.length === 0) return;
     const maxX = Math.max(...tables.map(t => t.x + CARD_W)) + 40;
     const maxY = Math.max(...tables.map(t => t.y + tableHeight(t))) + 40;
-    scale = Math.min(1, Math.min(window.innerWidth / maxX, window.innerHeight / maxY));
+    const w = containerEl ? containerEl.clientWidth : window.innerWidth;
+    const h = containerEl ? containerEl.clientHeight : window.innerHeight;
+    scale = Math.min(1, Math.min(w / maxX, h / maxY));
     panX = 20; panY = 20;
   }
 
@@ -153,6 +156,7 @@
     <div class="flex-1 flex items-center justify-center text-muted-foreground text-sm">No tables found in {schema || db}</div>
   {:else}
     <div class="flex-1 overflow-hidden"
+      bind:this={containerEl}
       onwheel={onWheel}
       onmousedown={onMouseDown}
       onmousemove={onMouseMove}

@@ -264,9 +264,9 @@
     formTesting = true; formTestResult = null; formError = '';
     try {
       const vars = await buildEnvVars();
-      await dbSaveConnection(folderPath, sanitizeForm());
       const result = await dbTestConnection(folderPath, formData.name, { vars });
       formTestResult = result;
+      await dbSaveConnection(folderPath, sanitizeForm());
     } catch (e) {
       formError = e?.message ?? String(e);
     } finally {
@@ -410,7 +410,7 @@
     deleteCollectionConfirm = { open: false, connName: null, item: null };
     if (!item) return;
     try {
-      await dbDeleteQueryCollection(folderPath, connName, item.dir_name);
+      await dbDeleteQueryCollection(folderPath, connName, item.path);
       invalidateQueriesCache(connName);
     } catch (e) { console.error(e); }
   }

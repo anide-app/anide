@@ -224,7 +224,7 @@
     const body = result.rows.map(r => r.map(v => {
       if (v === null) return 'NULL';
       const s = String(v);
-      return s.includes(',') || s.includes('"') ? `"${s.replace(/"/g, '""')}"` : s;
+      return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
     }).join(',')).join('\n');
     const blob = new Blob([header + '\n' + body], { type: 'text/csv' });
     const a = document.createElement('a');
