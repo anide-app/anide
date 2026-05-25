@@ -44,6 +44,11 @@
   import DocTab from '$lib/components/workspace/DocTab.svelte';
   import ConflictTab from '$lib/components/workspace/ConflictTab.svelte';
   import ExcalidrawTab from '$lib/components/workspace/ExcalidrawTab.svelte';
+  import ApiTab from '$lib/components/workspace/ApiTab.svelte';
+  import DbPanel from '$lib/components/panels/DbPanel.svelte';
+  import DbDataTab from '$lib/components/workspace/DbDataTab.svelte';
+  import DbQueryTab from '$lib/components/workspace/DbQueryTab.svelte';
+  import DbDiagramTab from '$lib/components/workspace/DbDiagramTab.svelte';
   import FilesPanel from '$lib/components/panels/FilesPanel.svelte';
   import TicTacToe from '$lib/components/TicTacToe.svelte';
 
@@ -192,6 +197,10 @@
     'terminal': Terminal,
     'file-edit': FileCode,
     'conflict': GitMerge,
+    'api-request': Globe,
+    'db-data': Database,
+    'db-query': Database,
+    'db-diagram': Database,
   };
 
   let activeTab = $derived(workspace.tabs.find(t => t.id === workspace.activeTabId) ?? null);
@@ -380,6 +389,8 @@
               <ApiPanel />
             {:else if workspace.activeTool === 'git'}
               <GitPanel />
+            {:else if workspace.activeTool === 'db'}
+              <DbPanel />
             {:else if workspace.activeTool === 'files'}
               <FilesPanel />
             {:else if workspace.activeTool !== 'docker'}
@@ -499,6 +510,14 @@
             <FileTab data={tab.data} tabId={tab.id} />
           {:else if tab.type === 'conflict'}
             <ConflictTab data={tab.data} tabId={tab.id} />
+          {:else if tab.type === 'api-request'}
+            <ApiTab data={tab.data} tabId={tab.id} />
+          {:else if tab.type === 'db-data'}
+            <DbDataTab data={tab.data} />
+          {:else if tab.type === 'db-query'}
+            <DbQueryTab data={tab.data} />
+          {:else if tab.type === 'db-diagram'}
+            <DbDiagramTab data={tab.data} />
           {/if}
         </div>
       {/each}

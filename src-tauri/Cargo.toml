@@ -40,4 +40,7 @@ bollard = "0.18"
 futures-util = "0.3"
 tokio = { version = "1", features = ["process", "io-util", "time", "macros"] }
 portable-pty = "0.8"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "multipart", "stream"] }
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "postgres", "mysql", "sqlite", "json", "chrono", "uuid"] }
+async-trait = "0.1"
 

@@ -38,20 +38,51 @@ import { invoke } from "@tauri-apps/api/core";
  */
 
 /**
+ * @typedef {Object} FormParam
+ * @property {string} key
+ * @property {string} value
+ * @property {"text"|"file"} param_type
+ * @property {boolean} enabled
+ */
+
+/**
  * @typedef {Object} RequestData
  * @property {string} method - HTTP method (GET, POST, PUT, etc.)
  * @property {string} url - URL with optional {{variable}} templates
  * @property {KVPair[]} headers
- * @property {KVPair[]} params
+ * @property {KVPair[]} params - Query params
+ * @property {KVPair[]} path_params - Path params (:id segments)
+ * @property {FormParam[]} form_params - Form body fields (used when body_type is "form")
  * @property {AuthConfig} auth
- * @property {string} body - Markdown body content
+ * @property {string} body_type - "json" | "form" | "raw" | "graphql" | "none"
+ * @property {string} request_body - HTTP request body content (for non-form types)
+ * @property {string} body - Markdown notes (not the HTTP body)
+ */
+
+/**
+ * @typedef {Object} RequestResponse
+ * @property {number} status
+ * @property {string} statusText
+ * @property {KVPair[]} headers
+ * @property {string} body
+ * @property {number} durationMs
+ * @property {number} sizeBytes
+ */
+
+/**
+ * @typedef {Object} SendRequestArgs
+ * @property {string} projectPath
+ * @property {RequestData} request
+ * @property {Record<string,string>} envVars
+ * @property {boolean} followRedirects
+ * @property {number} timeoutMs
  */
 
 /**
  * @typedef {Object} RequestTreeFile
  * @property {"file"} type
  * @property {string} name - Display name (without .md)
- * @property {string} path - Relative path from .takerest/requests/
+ * @property {string} path - Relative path from .anide/requests/
  * @property {string} method - HTTP method
  */
 
@@ -59,7 +90,7 @@ import { invoke } from "@tauri-apps/api/core";
  * @typedef {Object} RequestTreeFolder
  * @property {"folder"} type
  * @property {string} name - Folder name
- * @property {string} path - Relative path from .takerest/requests/
+ * @property {string} path - Relative path from .anide/requests/
  * @property {RequestTreeNode[]} children
  */
 
@@ -70,7 +101,7 @@ import { invoke } from "@tauri-apps/api/core";
 // ── Commands ─────────────────────────────────────────────────────────────
 
 /**
- * Ensures .takerest/requests/ directory exists. Creates if missing.
+ * Ensures .anide/requests/ directory exists. Creates if missing.
  * @param {string} projectPath - Absolute path to the project folder
  * @returns {Promise<boolean>} true if it already existed, false if just created
  */
@@ -79,7 +110,7 @@ export async function initRequestsDir(projectPath) {
 }
 
 /**
- * Returns the full request tree from .takerest/requests/.
+ * Returns the full request tree from .anide/requests/.
  * Folders first (alphabetical), then files (alphabetical).
  * @param {string} projectPath - Absolute path to the project folder
  * @returns {Promise<RequestTreeNode[]>}
@@ -91,7 +122,7 @@ export async function getRequestTree(projectPath) {
 /**
  * Reads a single request file and returns parsed data.
  * @param {string} projectPath - Absolute path to the project folder
- * @param {string} requestPath - Relative path from .takerest/requests/, e.g. "auth/login.md"
+ * @param {string} requestPath - Relative path from .anide/requests/, e.g. "auth/login.md"
  * @returns {Promise<RequestData>}
  */
 export async function readRequest(projectPath, requestPath) {
@@ -142,7 +173,29 @@ export async function duplicateRequest(projectPath, requestPath) {
 }
 
 /**
- * Creates a collection (folder) inside .takerest/requests/.
+ * Renames a request file within its current directory.
+ * @param {string} projectPath
+ * @param {string} requestPath - Current relative path, e.g. "auth/login.md"
+ * @param {string} newName - New stem (without .md), e.g. "signin"
+ * @returns {Promise<string>} The new relative path
+ */
+export async function renameRequest(projectPath, requestPath, newName) {
+  return invoke("rename_request", { projectPath, requestPath, newName });
+}
+
+/**
+ * Renames a collection (folder) within its current parent directory.
+ * @param {string} projectPath
+ * @param {string} collectionPath - Current relative path, e.g. "auth"
+ * @param {string} newName - New folder name
+ * @returns {Promise<string>} The new relative path
+ */
+export async function renameCollection(projectPath, collectionPath, newName) {
+  return invoke("rename_collection", { projectPath, collectionPath, newName });
+}
+
+/**
+ * Creates a collection (folder) inside .anide/requests/.
  * Supports nested paths, e.g. "auth/admin" creates both auth/ and auth/admin/.
  * @param {string} projectPath - Absolute path to the project folder
  * @param {string} collectionPath - Relative folder path, e.g. "auth/admin"
@@ -150,6 +203,25 @@ export async function duplicateRequest(projectPath, requestPath) {
  */
 export async function createCollection(projectPath, collectionPath) {
   return invoke("create_collection", { projectPath, collectionPath });
+}
+
+/**
+ * Send an HTTP request, resolving {{ENV_VAR}} tokens before sending.
+ * @param {SendRequestArgs} args
+ * @returns {Promise<RequestResponse>}
+ */
+export async function sendRequest(args) {
+  return invoke("send_request", { args });
+}
+
+/**
+ * Resolve a single template string against env vars.
+ * @param {string} template
+ * @param {Record<string,string>} envVars
+ * @returns {Promise<{ resolved: string, tokens: Array<{token: string, value: string|null}> }>}
+ */
+export async function resolveTemplate(template, envVars) {
+  return invoke("resolve_template", { template, envVars });
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────
@@ -165,7 +237,11 @@ export function createEmptyRequest(method = "GET") {
     url: "",
     headers: [],
     params: [],
+    path_params: [],
+    form_params: [],
     auth: { type: "none" },
+    body_type: "none",
+    request_body: "",
     body: "",
   };
 }

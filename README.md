@@ -97,20 +97,27 @@ What's coming:
 
 Replaces: Postman, Insomnia, Bruno
 
-- [ ] REST, GraphQL, gRPC, WebSocket, SSE requests
-- [ ] Auth: Bearer/JWT, API Key, Basic, OAuth 2.0, mTLS
-- [ ] Environment variables pulled from your `.env` files automatically
-- [ ] Collections committed to Git alongside your code
+- [x] REST requests
+- [ ] GraphQL requests
+- [ ] gRPC requests
+- [ ] WebSocket requests
+- [ ] SSE requests
+- [x] Auth: Bearer/JWT, API Key, Basic, OAuth 2.0
+- [x] Environment variables pulled from your `.env` files automatically
+- [x] Collections committed to Git alongside your code
 - [ ] Import from Postman JSON, OpenAPI, curl
 
 ### Database
 
 Replaces: DBeaver, TablePlus, MongoDB Compass
 
-- [ ] Connect to PostgreSQL, MySQL/MariaDB, SQLite, MongoDB
-- [ ] Write and run queries with results table
-- [ ] Explore schema and table structure
-- [ ] Edit rows directly
+- [ ] Connect to PostgreSQL
+- [ ] Connect to MySQL / MariaDB
+- [x] Connect to SQLite
+- [ ] Connect to MongoDB
+- [x] Write and run queries with results table
+- [x] Explore schema and table structure
+- [x] Edit rows directly
 - [ ] Track and compare migrations across environments
 
 ### KV / Cache
@@ -142,7 +149,7 @@ Replaces: GitHub Desktop, GitKraken, Fork
 - [x] Create, switch, and manage branches
 - [x] Push, pull, fetch
 - [x] View commit history
-- [ ] Resolve merge conflicts
+- [x] Resolve merge conflicts
 
 ### Docker
 

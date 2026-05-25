@@ -6,12 +6,14 @@ Git, Docker, Terminal, and Env tools shipped.
 
 ## Features
 
-| Feature | Spec | Replaces | Storage |
-|---|---|---|---|
-| REST Client | [api.md](api.md) | Postman, Insomnia, Bruno | `.anide/requests/` |
-| Database Browser | [db.md](db.md) | DBeaver, TablePlus | `.anide/database/` |
-| Cache / KV | [kv.md](kv.md) | Redis Insight, Another Redis | `.anide/kv/` |
-| Object Storage | [s3.md](s3.md) | S3 Console, Cyberduck | `.anide/s3/` |
+
+| Feature          | Spec             | Replaces                     | Storage            |
+| ---------------- | ---------------- | ---------------------------- | ------------------ |
+| REST Client      | [api.md](api.md) | Postman, Insomnia, Bruno     | `.anide/requests/` |
+| Database Browser | [db.md](db.md)   | DBeaver, TablePlus           | `.anide/database/` |
+| Cache / KV       | [kv.md](kv.md)   | Redis Insight, Another Redis | `.anide/kv/`       |
+| Object Storage   | [s3.md](s3.md)   | S3 Console, Cyberduck        | `.anide/s3/`       |
+
 
 All connection definitions and request collections live inside `.anide/` so they are committed
 to the repo and shared with the team. Secrets stay in `.env` files (gitignored); only the
@@ -27,18 +29,20 @@ is opened.
 
 ### Syntax reference
 
-| Pattern | Resolves to |
-|---|---|
-| `{{VAR_NAME}}` | Value of `VAR_NAME` from the active env file set |
-| `{{env.VAR_NAME}}` | Same — explicit env namespace |
-| `{{env.production.API_KEY}}` | `API_KEY` from `.env.production` specifically |
-| `{{env..env.local.SECRET}}` | `SECRET` from `.env.local` specifically |
-| `{{Faker.internet.email}}` | Random email address (new value each run) |
-| `{{Faker.datatype.uuid}}` | Random UUID v4 |
-| `{{Faker.name.fullName}}` | Random full name |
-| `{{Faker.number.int({"min":1,"max":100})}}` | Random integer with bounds |
-| `{{Faker.date.recent}}` | Recent ISO 8601 date string |
-| `{{Faker.lorem.sentence}}` | Random sentence |
+
+| Pattern                                     | Resolves to                                      |
+| ------------------------------------------- | ------------------------------------------------ |
+| `{{VAR_NAME}}`                              | Value of `VAR_NAME` from the active env file set |
+| `{{env.VAR_NAME}}`                          | Same — explicit env namespace                    |
+| `{{env.production.API_KEY}}`                | `API_KEY` from `.env.production` specifically    |
+| `{{env..env.local.SECRET}}`                 | `SECRET` from `.env.local` specifically          |
+| `{{Faker.internet.email}}`                  | Random email address (new value each run)        |
+| `{{Faker.datatype.uuid}}`                   | Random UUID v4                                   |
+| `{{Faker.name.fullName}}`                   | Random full name                                 |
+| `{{Faker.number.int({"min":1,"max":100})}}` | Random integer with bounds                       |
+| `{{Faker.date.recent}}`                     | Recent ISO 8601 date string                      |
+| `{{Faker.lorem.sentence}}`                  | Random sentence                                  |
+
 
 ### Resolution order for bare `{{VAR}}`
 
@@ -53,23 +57,25 @@ and a warning is shown in the UI.
 
 All resolution happens in the frontend (no Rust needed). Uses the `@faker-js/faker` package.
 
-| Namespace | Methods |
-|---|---|
-| `internet` | `email`, `url`, `ip`, `userAgent`, `password`, `domainName` |
-| `person` / `name` | `fullName`, `firstName`, `lastName` |
-| `datatype` / `string` | `uuid`, `alphaNumeric` |
-| `number` | `int`, `float` |
-| `date` | `past`, `future`, `recent`, `birthdate` |
-| `lorem` | `word`, `words`, `sentence`, `paragraph` |
-| `phone` | `number` |
-| `color` | `rgb`, `hsl`, `human` |
+
+| Namespace             | Methods                                                     |
+| --------------------- | ----------------------------------------------------------- |
+| `internet`            | `email`, `url`, `ip`, `userAgent`, `password`, `domainName` |
+| `person` / `name`     | `fullName`, `firstName`, `lastName`                         |
+| `datatype` / `string` | `uuid`, `alphaNumeric`                                      |
+| `number`              | `int`, `float`                                              |
+| `date`                | `past`, `future`, `recent`, `birthdate`                     |
+| `lorem`               | `word`, `words`, `sentence`, `paragraph`                    |
+| `phone`               | `number`                                                    |
+| `color`               | `rgb`, `hsl`, `human`                                       |
+
 
 ### UI behaviour
 
 - Inputs with template strings show a preview chip on focus — the resolved value rendered inline.
 - Unresolved variables are highlighted red.
 - A "Variable Inspector" panel lists every `{{...}}` token in the current request or connection,
-  its source, and its resolved value.
+its source, and its resolved value.
 - Faker values regenerate on each send/connect (not on each keystroke).
 
 ---
@@ -87,7 +93,7 @@ human-readable, diffable, and editable in any editor.
       create-user.md
     auth/
       login.md
-    .history/                  # response history (gitignored)
+
 
   database/                    # DB connections — one folder per connection
     local-postgres/
@@ -121,7 +127,17 @@ human-readable, diffable, and editable in any editor.
 ## Implementation order
 
 1. **REST Client** — backend skeleton (`api.rs`) already exists; needs HTTP execution +
-   template resolution + frontend tab.
-2. **Database** — new Rust module, `sqlx` dep, new frontend tab.
+ template resolution + frontend tab.
+2. **Database** — new Rust module (`sqlx`, `mongodb`), trait-based driver system, Svelte Flow
+ schema diagram, svelte-tablecn data table with infinite scroll.
 3. **Cache/KV** — new Rust module, `redis` dep, new frontend tab.
 4. **Object Storage** — new Rust module, `aws-sdk-s3` dep, new frontend tab.
+
+---
+
+## History / Audit Log (deferred)
+
+Request/response history (REST), query/result history (DB), and command history (KV) are
+intentionally **not** implemented in the initial pass. The plan is to add a local
+DuckDB or SQLite store later as a shared history backend used by all tools. Do not add
+`.history/` folders or any history UI until that decision is made.

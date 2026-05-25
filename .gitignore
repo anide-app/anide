@@ -1,5 +1,8 @@
 .DS_Store
 node_modules
+*.db
+*.sqlite
+*.sqlite3
 /build
 /.svelte-kit
 /package

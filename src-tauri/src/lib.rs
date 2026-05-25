@@ -2,6 +2,7 @@ mod commands;
 mod error;
 mod utils;
 
+use commands::db::DbState;
 use commands::docker::{DockerEventState, DockerStreamState};
 use commands::terminal::TerminalState;
 use commands::watcher::WatcherState;
@@ -47,6 +48,7 @@ pub fn run() {
         .manage(DockerStreamState::new())
         .manage(DockerEventState::new())
         .manage(TerminalState::new())
+        .manage(DbState::new())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
@@ -96,6 +98,39 @@ pub fn run() {
             commands::git::git_discard_file,
             commands::git::git_add_to_gitignore,
             commands::git::open_file_default,
+            // db commands
+            commands::db::db_list_connections,
+            commands::db::db_save_connection,
+            commands::db::db_delete_connection,
+            commands::db::db_test_connection,
+            commands::db::db_connect,
+            commands::db::db_disconnect,
+            commands::db::db_get_tree_structure,
+            commands::db::db_list_databases,
+            commands::db::db_list_schemas,
+            commands::db::db_list_tables,
+            commands::db::db_list_columns,
+            commands::db::db_list_indexes,
+            commands::db::db_list_views,
+            commands::db::db_list_functions,
+            commands::db::db_get_relationships,
+            commands::db::db_query_page,
+            commands::db::db_count_table,
+            commands::db::db_update_row,
+            commands::db::db_insert_row,
+            commands::db::db_delete_rows,
+            commands::db::db_preview_update,
+            commands::db::db_preview_insert,
+            commands::db::db_preview_delete,
+            commands::db::db_list_queries,
+            commands::db::db_save_query,
+            commands::db::db_delete_query,
+            commands::db::db_create_query_collection,
+            commands::db::db_rename_query,
+            commands::db::db_duplicate_query,
+            commands::db::db_delete_query_collection,
+            commands::db::db_duplicate_query_collection,
+            commands::db::db_rename_query_collection,
             // api commands
             commands::api::init_requests_dir,
             commands::api::get_request_tree,
@@ -105,6 +140,10 @@ pub fn run() {
             commands::api::delete_request,
             commands::api::duplicate_request,
             commands::api::create_collection,
+            commands::api::rename_request,
+            commands::api::rename_collection,
+            commands::api::send_request,
+            commands::api::resolve_template,
             // watcher commands
             commands::watcher::watch_project,
             commands::watcher::unwatch_project,

@@ -203,7 +203,6 @@ pub fn list_doc_files(project_path: String) -> Result<Vec<FileEntry>, AppError> 
     }
 
     let skip_roots: &[&OsStr] = &[
-        OsStr::new(".anide"),
         OsStr::new(".takerest"),
     ];
 
